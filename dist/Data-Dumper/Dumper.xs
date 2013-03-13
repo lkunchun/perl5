@@ -12,8 +12,35 @@
 #  define DD_USE_OLD_ID_FORMAT
 #endif
 
+/* These definitions are ASCII only.  But the pure-perl .pm avoids
+ * calling this .xs file for releases where they aren't defined */
+
+#ifndef isASCII
+#   define isASCII(c) (((UV) (c)) < 128)
+#endif
+
+#ifndef ESC_NATIVE          /* \e */
+#   define ESC_NATIVE 27
+#endif
+
+#ifndef isPRINT
+#   define isPRINT(c) (((UV) (c)) >= ' ' && ((UV) (c)) < 127)
+#endif
+
+#ifndef isALPHA
+#   define isALPHA(c) ((((UV) (c)) >= 'a' && ((UV) (c)) <= 'z') || (((UV) (c)) <= 'Z' && ((UV) (c)) >= 'A'))
+#endif
+
+#ifndef isIDFIRST
+#   define isIDFIRST(c) (isALPHA(c) || (c) == '_')
+#endif
+
 #ifndef isWORDCHAR
-#   define isWORDCHAR(c) isALNUM(c)
+#   define isWORDCHAR(c) (isIDFIRST(c) || (((UV) (c)) >= '0' && ((UV) (c)) <= '9'))
+#endif
+
+#ifndef isCNTRL
+#   define isCNTRL(k) ((((UV) (c)) < ' ') || (c) == 127)
 #endif
 
 static I32 num_q (const char *s, STRLEN slen);
@@ -39,12 +66,6 @@ static I32 DD_dump (pTHX_ SV *val, const char *name, STRLEN namelen, SV *retval,
  * given malformed input */
 
 #if PERL_VERSION <= 6 /* Perl 5.6 and earlier */
-
-# ifdef EBCDIC
-#  define UNI_TO_NATIVE(ch) (((ch) > 255) ? (ch) : ASCII_TO_NATIVE(ch))
-# else
-#  define UNI_TO_NATIVE(ch) (ch)
-# endif
 
 UV
 Perl_utf8_to_uvchr_buf(pTHX_ U8 *s, U8 *send, STRLEN *retlen)
@@ -72,8 +93,7 @@ Perl_utf8_to_uvchr_buf(pTHX_ U8 *s, U8 *send, STRLEN *retlen)
      * end of the buffer if there is a malformation that indicates the
      * character is longer than the space available */
 
-    const UV uv = utf8_to_uvchr(s, retlen);
-    return UNI_TO_NATIVE(uv);
+    return utf8_to_uvchr(s, retlen);
 }
 
 # if !defined(PERL_IMPLICIT_CONTEXT)
@@ -236,12 +256,20 @@ esc_q_utf8(pTHX_ SV* sv, const char *src, STRLEN slen, I32 do_utf8, I32 useqq)
     int increment;
     UV next;
 
-    /* this will need EBCDICification */
     for (s = src; s < send; do_utf8 ? s += increment : s++) {
-        const UV k = do_utf8 ? utf8_to_uvchr_buf((U8*)s, (U8*) send, NULL) : *(U8*)s;
+        UV k;
 
-        /* check for invalid utf8 */
-        increment = (k == 0 && *s != '\0') ? 1 : UTF8SKIP(s);
+        if (do_utf8) {
+            k = utf8_to_uvchr_buf((U8*)s, (U8*) send, NULL);
+
+            /* treat invalid utf8 byte by byte.  This loop iteration gets the
+             * first byte */
+            increment = (k == 0 && *s != '\0') ? 1 : UTF8SKIP(s);
+        }
+        else {
+            k = *(U8*)s;
+            increment = 1;
+        }
 
 	/* this is only used to check if the next character is an
 	 * ASCII digit, which are invariant, so if the following collects
@@ -249,11 +277,7 @@ esc_q_utf8(pTHX_ SV* sv, const char *src, STRLEN slen, I32 do_utf8, I32 useqq)
 	 */
 	next = (s + increment >= send ) ? 0 : *(U8*)(s+increment);
 
-#ifdef EBCDIC
-	if (!isprint(k) || k > 256) {
-#else
-	if (k > 127) {
-#endif
+	if (! isASCII(k)) {
             /* 4: \x{} then count the number of hex digits.  */
             grow += 4 + (k <= 0xFF ? 2 : k <= 0xFFF ? 3 : k <= 0xFFFF ? 4 :
 #if UVSIZE == 4
@@ -262,17 +286,25 @@ esc_q_utf8(pTHX_ SV* sv, const char *src, STRLEN slen, I32 do_utf8, I32 useqq)
                 k <= 0xFFFFFFFF ? 8 : UVSIZE * 4
 #endif
                 );
-#ifndef EBCDIC
+/* XXX Look at posix.log */
 	} else if (useqq &&
-	    /* we can't use the short form like '\0' if followed by a digit */
-                   (((k >= 7 && k <= 10) || k == 12 || k == 13 || k == 27)
-                 || (k < 8 && (next < '0' || next > '9')))) {
+                  ((k == '\a'
+                 || k == '\b'
+                 || k == '\t'
+                 || k == '\n'
+                 || k == '\r'
+                 || k == '\f'
+                 || k == ESC_NATIVE)
+
+                    /* we can't use the short form like '\0' if followed by a
+                     * digit */
+                 || (k < 8 && (next < '0' || next > '9'))))
+        {
 	    grow += 2;
-	} else if (useqq && k <= 31 && (next < '0' || next > '9')) {
+	} else if (useqq && k < ' ' && (next < '0' || next > '9')) {
 	    grow += 3;
-	} else if (useqq && (k <= 31 || k >= 127)) {
+	} else if (useqq && ! isPRINT(k)) {
 	    grow += 4;
-#endif
         } else if (k == '\\') {
             backslashes++;
         } else if (k == '\'') {
@@ -283,6 +315,7 @@ esc_q_utf8(pTHX_ SV* sv, const char *src, STRLEN slen, I32 do_utf8, I32 useqq)
             normal++;
         }
     }
+    /* Add the comment that a hex constant essentially forces qq */
     if (grow || useqq) {
         /* We have something needing hex. 3 is ""\0 */
         sv_grow(sv, cur + 3 + grow + 2*backslashes + single_quotes
@@ -291,31 +324,35 @@ esc_q_utf8(pTHX_ SV* sv, const char *src, STRLEN slen, I32 do_utf8, I32 useqq)
 
         *r++ = '"';
 
-        for (s = src; s < send; do_utf8 ? s += UTF8SKIP(s) : s++) {
-            const UV k = do_utf8 ? utf8_to_uvchr_buf((U8*)s, (U8*) send, NULL) : *(U8*)s;
+        for (s = src; s < send; s += increment) {
+            UV k;
+
+            if (do_utf8) {
+                k = utf8_to_uvchr_buf((U8*)s, (U8*) send, NULL);
+                increment = (k == 0 && *s != '\0') ? 1 : UTF8SKIP(s);
+            }
+            else {
+                k = *(U8*)s;
+                increment = 1;
+            }
 
             if (k == '"' || k == '\\' || k == '$' || k == '@') {
                 *r++ = '\\';
                 *r++ = (char)k;
             }
-            else
-#ifdef EBCDIC
-	      if (isprint(k) && k < 256)
-#else
-	      if (useqq && (k <= 31 || k == 127 || (!do_utf8 && k > 127))) {
+            else if (useqq && (isCNTRL(k) || (! do_utf8 && ! isASCII(k)))) {
 	        bool next_is_digit;
 
 		*r++ = '\\';
 		switch (k) {
-		case 7:  *r++ = 'a'; break;
-		case 8:  *r++ = 'b'; break;
-		case 9:  *r++ = 't'; break;
-		case 10: *r++ = 'n'; break;
-		case 12: *r++ = 'f'; break;
-		case 13: *r++ = 'r'; break;
-		case 27: *r++ = 'e'; break;
+		case '\a':  *r++ = 'a'; break;
+		case '\b':  *r++ = 'b'; break;
+		case '\t':  *r++ = 't'; break;
+		case '\n':  *r++ = 'n'; break;
+		case '\f':  *r++ = 'f'; break;
+		case '\r':  *r++ = 'r'; break;
+		case ESC_NATIVE: *r++ = 'e'; break;
 		default:
-		    increment = (k == 0 && *s != '\0') ? 1 : UTF8SKIP(s);
 
 		    /* only ASCII digits matter here, which are invariant,
 		     * since we only encode characters \377 and under, or
@@ -339,8 +376,7 @@ esc_q_utf8(pTHX_ SV* sv, const char *src, STRLEN slen, I32 do_utf8, I32 useqq)
 		    }
 		}
 	    }
-	    else if (k < 0x80)
-#endif
+	    else if (isASCII(k))
                 *r++ = (char)k;
             else {
 #if PERL_VERSION < 10
@@ -1270,7 +1306,7 @@ MODULE = Data::Dumper		PACKAGE = Data::Dumper         PREFIX = Data_Dumper_
 #
 # This is the exact equivalent of Dump.  Well, almost. The things that are
 # different as of now (due to Laziness):
-#   * doesn't deparse yet.'
+#   * doesn't do double-quotes yet.
 #
 
 void
