@@ -3744,6 +3744,7 @@ typedef struct regnode_charclass_class regnode_charclass_posixl;
 typedef struct regnode_ssc regnode_ssc;
 typedef struct RExC_state_t RExC_state_t;
 struct _reg_trie_data;
+typedef struct _reg_trie_data reg_trie_data;
 
 #endif
 

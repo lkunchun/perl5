@@ -6902,6 +6902,14 @@ STATIC AV*	S_add_multi_match(pTHX_ AV* multi_char_matches, SV* multi_string, con
 #define PERL_ARGS_ASSERT_ADD_MULTI_MATCH	\
 	assert(multi_string)
 
+STATIC void	S_add_wide_char_to_trie(pTHX_ RExC_state_t *pRExC_state, const UV * const code_point_ptr, HV** widecharmap, reg_trie_data *trie, AV *revcharmap)
+			__attribute__nonnull__(pTHX_1)
+			__attribute__nonnull__(pTHX_2)
+			__attribute__nonnull__(pTHX_4)
+			__attribute__nonnull__(pTHX_5);
+#define PERL_ARGS_ASSERT_ADD_WIDE_CHAR_TO_TRIE	\
+	assert(pRExC_state); assert(code_point_ptr); assert(trie); assert(revcharmap)
+
 PERL_STATIC_INLINE void	S_alloc_maybe_populate_EXACT(pTHX_ RExC_state_t *pRExC_state, regnode *node, I32 *flagp, STRLEN len, UV code_point, bool downgradable)
 			__attribute__nonnull__(pTHX_1)
 			__attribute__nonnull__(pTHX_2)
