@@ -196,7 +196,7 @@ struct regnode_2 {
  * significantly slow down the test suite */
 #define NUM_ANYOF_CODE_POINTS   (1 << 8)
 
-#define ANYOF_BITMAP_SIZE	(NUM_ANYOF_CODE_POINTS / 8)   /* 8 bits/Byte */
+#define ANYOF_BITMAP_SIZE	(NUM_ANYOF_CODE_POINTS / CHARBITS) /* bits/Byte */
 
 /* Note that these form structs which are supersets of the next smaller one, by
  * appending fields.  Alignment problems can occur if one of those optional
@@ -571,7 +571,7 @@ struct regnode_ssc {
 
 #define ANYOF_BITMAP_ZERO(ret)	Zero(((struct regnode_charclass*)(ret))->bitmap, ANYOF_BITMAP_SIZE, char)
 #define ANYOF_BITMAP(p)		(((struct regnode_charclass*)(p))->bitmap)
-#define ANYOF_BITMAP_BYTE(p, c)	(ANYOF_BITMAP(p)[(((U8)(c)) >> 3) & 31])
+#define ANYOF_BITMAP_BYTE(p, c)	(ANYOF_BITMAP(p)[ (unsigned) (c) / CHARBITS ] )
 #define ANYOF_BITMAP_SET(p, c)	(ANYOF_BITMAP_BYTE(p, c) |=  ANYOF_BIT(c))
 #define ANYOF_BITMAP_CLEAR(p,c)	(ANYOF_BITMAP_BYTE(p, c) &= ~ANYOF_BIT(c))
 #define ANYOF_BITMAP_TEST(p, c)	cBOOL(ANYOF_BITMAP_BYTE(p, c) &   ANYOF_BIT(c))
@@ -796,7 +796,7 @@ typedef struct _reg_ac_data reg_ac_data;
    three different sets... */
 
 #define TRIE_BITMAP(p)		(((reg_trie_data *)(p))->bitmap)
-#define TRIE_BITMAP_BYTE(p, c)	(TRIE_BITMAP(p)[(((U8)(c)) >> 3) & 31])
+#define TRIE_BITMAP_BYTE(p, c)	(TRIE_BITMAP(p) [ (unsigned) (c) / CHARBITS ] )
 #define TRIE_BITMAP_SET(p, c)	(TRIE_BITMAP_BYTE(p, c) |=  ANYOF_BIT((U8)c))
 #define TRIE_BITMAP_CLEAR(p,c)	(TRIE_BITMAP_BYTE(p, c) &= ~ANYOF_BIT((U8)c))
 #define TRIE_BITMAP_TEST(p, c)	(TRIE_BITMAP_BYTE(p, c) &   ANYOF_BIT((U8)c))
@@ -805,7 +805,7 @@ typedef struct _reg_ac_data reg_ac_data;
 #define IS_TRIE_AC(op) ((op)>=AHOCORASICK)
 
 
-#define BITMAP_BYTE(p, c)	(((U8*)p)[(((U8)(c)) >> 3) & 31])
+#define BITMAP_BYTE(p, c)	(( (U8*) (p) )[ (unsigned) (c) / CHARBITS ] )
 #define BITMAP_TEST(p, c)	(BITMAP_BYTE(p, c) &   ANYOF_BIT((U8)c))
 
 /* these defines assume uniquecharcount is the correct variable, and state may be evaluated twice */
