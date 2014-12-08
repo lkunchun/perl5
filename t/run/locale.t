@@ -301,17 +301,13 @@ EOF
             local $ENV{LANG} = $different;
             local $ENV{PERL_BADLANG} = 0;
 
-            # Can't turn off the warnings, so send them to /dev/null
-            if (! fresh_perl_is(<<"EOF", "$difference", { stderr => "devnull" },
+            if (! fresh_perl_is(<<"EOF", "$difference", { },
                 if (\$ENV{LC_ALL} ne "invalid" || \$ENV{LC_NUMERIC} ne "invalid")
                 {
                     # Make the test pass if the sh didn't accept the ENV set
                     print "$difference\n";
                     exit 0;
                 }
-                #print "LC_ALL=", \$ENV{LC_ALL}, "\n";
-                #print "LC_NUMERIC=", \$ENV{LC_NUMERIC}, "\n";
-                #print "LANG=", \$ENV{LANG}, "\n";
                 use locale;
                 use POSIX qw(locale_h);
                 my \$in = 4.2;
@@ -334,9 +330,11 @@ EOF
                 local $ENV{LANG} = "invalid";
                 local $ENV{PERL_BADLANG} = 0;
 
-                # Can't turn off the warnings, so send them to /dev/null
                 if (! fresh_perl_is(<<"EOF", 4.2, { },
-                    if (\$ENV{LC_ALL} ne "invalid") {
+                    if (\$ENV{LC_ALL} ne "invalid"
+                        || \$ENV{LC_NUMERIC} ne "invalid"
+                        || \$ENV{LANG} ne "invalid")
+                    {
                         print "$difference\n";
                         exit 0;
                     }
