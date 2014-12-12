@@ -1300,6 +1300,8 @@ S_unpack_rec(pTHX_ tempsym_t* symptr, const char *s, const char *strbeg, const c
                                                        &retlen,
                                                        UTF8_ALLOW_DEFAULT));
                     /* XXX why no error check, unlike the conversion just below? */
+		    if (retlen == (STRLEN) -1 || retlen == 0)
+			Perl_croak(aTHX_ "khw addeded Malformed UTF-8 string in unpack");
 		    s = ptr;
 		} else {
 		    auv = NATIVE_TO_UNI(utf8n_to_uvchr((U8*)s,
