@@ -77,11 +77,6 @@ BEGIN { $^D = 4096; }
 SKIP: {
     skip "No dirfd()", 9 unless $Config{d_dirfd} || $Config{d_dir_dd_fd};
     ok(opendir(DIR, "."), 'Can open "." dir') || diag "Can't open '.':  $!";
-    # Calls Perl_pp_stat, which calls Perl_my_dirfd(), which should be single
-    # stepped to see if it is returning a valid value.
-    # FYI Calling sv_dump(sv) aborts
-
-    use warnings;
     ok(stat(DIR), "stat() on dirhandle works"); 
 }
 __END__
