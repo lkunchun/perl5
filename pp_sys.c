@@ -2867,10 +2867,13 @@ PP(pp_stat)
                             havefp = TRUE;
                         }
                     } else if (IoDIRP(io)) {
+                        int sav_errno;
+                        DEBUG_U(PerlIO_printf(Perl_debug_log, "%s: %d: my_dirfd=%d\n",__FILE__, __LINE__, my_dirfd(IoDIRP(io))));
+                        errno = 0;
                         PL_laststatval =
                             PerlLIO_fstat(my_dirfd(IoDIRP(io)), &PL_statcache);
-                        DEBUG_U(PerlIO_printf(Perl_debug_log, "%s: %d: my_dirfd=%d\n",__FILE__, __LINE__, my_dirfd(IoDIRP(io))));
-                        DEBUG_U(PerlIO_printf(Perl_debug_log, "%s: %d: PL_laststat_val=%d\n",__FILE__, __LINE__, PL_laststatval));
+                        sav_errno = errno;
+                        DEBUG_U(PerlIO_printf(Perl_debug_log, "%s: %d: PL_laststat_val=%d, errno=%d\n",__FILE__, __LINE__, PL_laststatval, sav_errno));
                         havefp = TRUE;
                     } else {
                         PL_laststatval = -1;
