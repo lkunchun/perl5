@@ -11190,6 +11190,15 @@ S_grok_bslash_N(pTHX_ RExC_state_t *pRExC_state, regnode** node_p,
                 vFAIL("Invalid hexadecimal number in \\N{U+...}");
             }
 
+#ifdef EBCDIC
+            /* This is the one place where both single- and double-quotish
+             * \N{U+xxxx} are evaluated.  The value is a Unicode code point
+             * which must be converted to native.  Note that in the case of
+             * multiple \N{U+xxxx.yyyy...}, the names handler should be
+             * returning native values, so no translation is needed for that
+             * case below. */
+            *valuep = UNI_TO_NATIVE(*valuep);
+#endif
             RExC_parse = endbrace + 1;
             return 1;
         }
