@@ -19,6 +19,8 @@ local $ENV{CC};
 my ( $base, $phony, $cwd );
 my ( $source_file, $object_file, $lib_file );
 
+$^D = 4096;
+
 $base = ExtUtils::CBuilder::Base->new();
 ok( $base, "ExtUtils::CBuilder::Base->new() returned true value" );
 isa_ok( $base, 'ExtUtils::CBuilder::Base' );

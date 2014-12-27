@@ -826,8 +826,15 @@ sub _can_do_level {
     # OK to untaint because we only ever use this internally
     # as a file path, never interpolating into the shell
     print STDERR __FILE__, ": ", __LINE__, ": fname=$fname\n";
+    $! = 0;
+    my $sav_fname;
     $fname = Cwd::abs_path($fname);
-    print STDERR __FILE__, ": ", __LINE__, ": Cwd::abs_path(\$fname)=$fname\n";
+    unless ($fname) {
+        my $errno = $!;
+        print STDERR __FILE__, ": ", __LINE__, ": Cwd::abs_path($sav_fname) returned nothing, errno=$errno\n";
+        $fname = $sav_fname if $sav_fname =~ m!^/!;
+    }
+
     ($fname) = $fname =~ /^(.*)$/;
 
     # If we have a directory, check that it is a directory

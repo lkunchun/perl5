@@ -301,7 +301,7 @@ EOF
             local $ENV{LANG} = $different;
             local $ENV{PERL_BADLANG} = 0;
 
-            if (! fresh_perl_is(<<"EOF", "$difference", { switches => ["-DL"] },
+            if (! fresh_perl_is(<<"EOF", "$difference", { switches => ["-DUL"] },
                 if (\$ENV{LC_ALL} ne "invalid" || \$ENV{LC_NUMERIC} ne "invalid")
                 {
                     # Make the test pass if the sh didn't accept the ENV set
@@ -334,7 +334,7 @@ EOF
                 local $ENV{LANG} = "invalid";
                 local $ENV{PERL_BADLANG} = 0;
 
-                if (! fresh_perl_is(<<"EOF", 4.2, { },
+                if (! fresh_perl_is(<<"EOF", 4.2, {switches => ["-DUL"]  },
                     if (\$ENV{LC_ALL} ne "invalid"
                         || \$ENV{LC_NUMERIC} ne "invalid"
                         || \$ENV{LANG} ne "invalid")

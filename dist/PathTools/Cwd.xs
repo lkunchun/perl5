@@ -82,6 +82,7 @@ bsd_realpath(const char *path, char resolved[MAXPATHLEN])
 			return (resolved);
 		resolved_len = 1;
 		left_len = my_strlcpy(left, path + 1, sizeof(left));
+                /*DEBUG_U(PerlIO_printf(Perl_debug_log, "%s: %d: left_len=%d, left=%s\n", __FILE__, __LINE__, left_len, left));*/
 	} else {
 		if (getcwd(resolved, MAXPATHLEN) == NULL) {
 			my_strlcpy(resolved, ".", MAXPATHLEN);

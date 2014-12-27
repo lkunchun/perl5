@@ -254,7 +254,9 @@ perl_construct(pTHXx)
     JMPENV_BOOTSTRAP;
     STATUS_ALL_SUCCESS;
 
-    init_i18nl10n(1);
+    PERL_DEBUG(PerlIO_printf(Perl_debug_log, "\nabout it call initi18l10n\n"));
+    init_i18nl10n(2);
+    PERL_DEBUG(PerlIO_printf(Perl_debug_log, "\niniti18l10n returned\n"));
 
 #if defined(LOCAL_PATCH_COUNT)
     PL_localpatches = local_patches;	/* For possible -v */

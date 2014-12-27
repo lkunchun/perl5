@@ -75,8 +75,12 @@ my $Filesystem_Time_Offset = abs($mtime - time);
 BEGIN { $^D = 4096; }
 
 SKIP: {
+    use Data::Dumper;
     skip "No dirfd()", 9 unless $Config{d_dirfd} || $Config{d_dir_dd_fd};
+    print STDERR __FILE__, ": ", __LINE__, ": calling opendir\n";
+    $!=0;
     ok(opendir(DIR, "."), 'Can open "." dir') || diag "Can't open '.':  $!";
+    print STDERR __FILE__, ": ", __LINE__, ": returned from opendir, errno= ", 0+$!, "\n";
     ok(stat(DIR), "stat() on dirhandle works"); 
 }
 __END__
