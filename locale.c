@@ -508,7 +508,7 @@ Perl_my_setlocale(pTHX_ int category, const char* locale)
      * otherwise to use the particular category's variable if set; otherwise to
      * use the LANG variable. */
 
-    bool override_LC_ALL = 0;
+    bool override_LC_ALL = FALSE;
     char * result;
 
     if (locale && strEQ(locale, "")) {
@@ -574,7 +574,7 @@ Perl_my_setlocale(pTHX_ int category, const char* locale)
         return result;
     }
 
-    /* Here the input locale was LC_ALL, and we have set it to what is in the
+    /* Here the input category was LC_ALL, and we have set it to what is in the
      * LANG variable or the system default if there is no LANG.  But these have
      * lower priority than the other LC_foo variables, so override it for each
      * one that is set.  (If they are set to "", it means to use the same thing
@@ -681,10 +681,12 @@ Perl_init_i18nl10n(pTHX_ int printwarn)
 #ifdef SYSTEM_DEFAULT_LOCALE
     const char *system_default_locale = NULL;
 #endif
+    if (lc_all != NULL && strEQ(lc_all, "invalid")) PerlIO_printf(Perl_error_log, "Called locale init\n");
 
 #ifndef LOCALE_ENVIRON_REQUIRED
     PERL_UNUSED_VAR(done);
 #else
+    if (lc_all != NULL && strEQ(lc_all, "invalid")) PerlIO_printf(Perl_error_log, "Thinks is Ultrix\n");
 
     /*
      * Ultrix setlocale(..., "") fails if there are no environment
@@ -757,6 +759,7 @@ Perl_init_i18nl10n(pTHX_ int printwarn)
     trial_locales_count = 1;
     for (i= 0; i < trial_locales_count; i++) {
         const char * trial_locale = trial_locales[i];
+        if (lc_all != NULL && strEQ(lc_all, "invalid")) PerlIO_printf(Perl_error_log, "iteration %d: trying locale '%s'\n", i, trial_locale);
 
         if (i > 0) {
 
@@ -766,7 +769,9 @@ Perl_init_i18nl10n(pTHX_ int printwarn)
             setlocale_failure = FALSE;
 
 #ifdef SYSTEM_DEFAULT_LOCALE
+        if (lc_all != NULL && strEQ(lc_all, "invalid")) PerlIO_printf(Perl_error_log, "Thinks there is a system default\n");
 #  ifdef WIN32
+        if (lc_all != NULL && strEQ(lc_all, "invalid")) PerlIO_printf(Perl_error_log, "Thinks is in win32\n");
             /* On Windows machines, an entry of "" after the 0th means to use
              * the system default locale, which we now proceed to get. */
             if (strEQ(trial_locale, "")) {
@@ -794,7 +799,9 @@ Perl_init_i18nl10n(pTHX_ int printwarn)
         }
 
 #ifdef LC_ALL
+        if (lc_all != NULL && strEQ(lc_all, "invalid")) PerlIO_printf(Perl_error_log, "Thinks there is LC_ALL\n");
         if (! my_setlocale(LC_ALL, trial_locale)) {
+            if (lc_all != NULL && strEQ(lc_all, "invalid")) PerlIO_printf(Perl_error_log, "Failed LC_ALL for '%s'\n", trial_locale);
             setlocale_failure = TRUE;
         }
         else {
@@ -805,6 +812,7 @@ Perl_init_i18nl10n(pTHX_ int printwarn)
              * not be defined for a locale, and setting it individually will
              * fail, whereas setting LC_ALL suceeds, leaving LC_COLLATE set to
              * the POSIX locale. */
+            if (lc_all != NULL && strEQ(lc_all, "invalid")) PerlIO_printf(Perl_error_log, "LC_ALL succeeded for '%s'; got '%s'\n", trial_locale, my_setlocale(LC_ALL, trial_locale));
             trial_locale = NULL;
         }
 #endif /* LC_ALL */
@@ -812,35 +820,52 @@ Perl_init_i18nl10n(pTHX_ int printwarn)
         if (!setlocale_failure) {
 #ifdef USE_LOCALE_CTYPE
             Safefree(curctype);
-            if (! (curctype = my_setlocale(LC_CTYPE, trial_locale)))
+            if (! (curctype = my_setlocale(LC_CTYPE, trial_locale))) {
+                if (lc_all != NULL && strEQ(lc_all, "invalid")) PerlIO_printf(Perl_error_log, "Failed LC_CTYPE for '%s'\n", trial_locale);
                 setlocale_failure = TRUE;
-            else
+            }
+            else {
                 curctype = savepv(curctype);
+                if (lc_all != NULL && strEQ(lc_all, "invalid")) PerlIO_printf(Perl_error_log, "LC_CTYPE succeeded '%s'\n", curctype);
+            }
 #endif /* USE_LOCALE_CTYPE */
 #ifdef USE_LOCALE_COLLATE
             Safefree(curcoll);
-            if (! (curcoll = my_setlocale(LC_COLLATE, trial_locale)))
+            if (! (curcoll = my_setlocale(LC_COLLATE, trial_locale))) {
+                if (lc_all != NULL && strEQ(lc_all, "invalid")) PerlIO_printf(Perl_error_log, "Failed LC_COLLATE for '%s'\n", trial_locale);
                 setlocale_failure = TRUE;
-            else
+            }
+            else {
                 curcoll = savepv(curcoll);
+                if (lc_all != NULL && strEQ(lc_all, "invalid")) PerlIO_printf(Perl_error_log, "LC_COLLATE succeeded '%s'\n", curcoll);
+            }
 #endif /* USE_LOCALE_COLLATE */
 #ifdef USE_LOCALE_NUMERIC
             Safefree(curnum);
-            if (! (curnum = my_setlocale(LC_NUMERIC, trial_locale)))
+            if (! (curnum = my_setlocale(LC_NUMERIC, trial_locale))) {
+                if (lc_all != NULL && strEQ(lc_all, "invalid")) PerlIO_printf(Perl_error_log, "Failed LC_NUMERIC for '%s'\n", trial_locale);
                 setlocale_failure = TRUE;
-            else
+            }
+            else {
                 curnum = savepv(curnum);
+                if (lc_all != NULL && strEQ(lc_all, "invalid")) PerlIO_printf(Perl_error_log, "LC_NUMERIC succeeded '%s'\n", curnum);
+            }
 #endif /* USE_LOCALE_NUMERIC */
 #ifdef USE_LOCALE_MESSAGES
-            if (! (my_setlocale(LC_MESSAGES, trial_locale)))
+            if (! (my_setlocale(LC_MESSAGES, trial_locale))) {
+                if (lc_all != NULL && strEQ(lc_all, "invalid")) PerlIO_printf(Perl_error_log, "Failed LC_MESSAGES for '%s'\n", trial_locale);
                 setlocale_failure = TRUE;
+            }
 #endif /* USE_LOCALE_MESSAGES */
 #ifdef USE_LOCALE_MONETARY
-            if (! (my_setlocale(LC_MONETARY, trial_locale)))
+            if (! (my_setlocale(LC_MONETARY, trial_locale))) {
+                if (lc_all != NULL && strEQ(lc_all, "invalid")) PerlIO_printf(Perl_error_log, "Failed LC_MONETARY for '%s'\n", trial_locale);
                 setlocale_failure = TRUE;
+            }
 #endif /* USE_LOCALE_MONETARY */
 
             if (! setlocale_failure) {  /* Success */
+                if (lc_all != NULL && strEQ(lc_all, "invalid")) PerlIO_printf(Perl_error_log, "Success in setting locale\n");
                 break;
             }
         }
@@ -936,16 +961,20 @@ Perl_init_i18nl10n(pTHX_ int printwarn)
                         goto done_lc_all;
                     }
                 }
+                if (lc_all != NULL && strEQ(lc_all, "invalid")) PerlIO_printf(Perl_error_log, "A fallback locale is LC_ALL='%s'\n", lc_all);
                 trial_locales[trial_locales_count++] = lc_all;
             }
           done_lc_all:
 
+            if (lc_all != NULL && strEQ(lc_all, "invalid")) PerlIO_printf(Perl_error_log, "lang=='%s'\n", lang);
             if (lang) {
                 for (j = 0; j < trial_locales_count; j++) {
+                    if (lc_all != NULL && strEQ(lc_all, "invalid")) PerlIO_printf(Perl_error_log, "j=%d, trial='%s'\n", j, trial_locales[j]);
                     if (strEQ(lang, trial_locales[j])) {
                         goto done_lang;
                     }
                 }
+                if (lc_all != NULL && strEQ(lc_all, "invalid")) PerlIO_printf(Perl_error_log, "A fallback locale is LANG='%s'\n", lang);
                 trial_locales[trial_locales_count++] = lang;
             }
           done_lang:
@@ -958,6 +987,7 @@ Perl_init_i18nl10n(pTHX_ int printwarn)
              * the array, but the code at the loop above knows to treat it
              * differently when not the 0th */
             trial_locales[trial_locales_count++] = "";
+                        if (lc_all != NULL && strEQ(lc_all, "invalid")) PerlIO_printf(Perl_error_log, "A fallback locale is '' WIN32\n");
 #endif
 
             for (j = 0; j < trial_locales_count; j++) {
@@ -965,6 +995,7 @@ Perl_init_i18nl10n(pTHX_ int printwarn)
                     goto done_C;
                 }
             }
+            if (lc_all != NULL && strEQ(lc_all, "invalid")) PerlIO_printf(Perl_error_log, "A fallback locale is C\n");
             trial_locales[trial_locales_count++] = "C";
 
           done_C: ;

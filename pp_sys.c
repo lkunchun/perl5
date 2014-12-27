@@ -2826,6 +2826,7 @@ PP(pp_stat)
     I32 max = 13;
     SV* sv;
 
+    DEBUG_U(PerlIO_printf(Perl_debug_log, "%s: %d: PL_laststat_val=%d\n",__FILE__, __LINE__, PL_laststatval));
     if (PL_op->op_flags & OPf_REF ? (gv = cGVOP_gv, 1)
                                   : !!(sv=POPs, gv = MAYBE_DEREF_GV(sv))) {
 	if (PL_op->op_type == OP_LSTAT) {
@@ -2852,19 +2853,24 @@ PP(pp_stat)
             if(gv) {
                 io = GvIO(gv);
 	    }
+            DEBUG_U(PerlIO_printf(Perl_debug_log, "%s: %d: io=%"UVuf"\n",__FILE__, __LINE__, (UV) io));
             if (io) {
                     if (IoIFP(io)) {
                         int fd = PerlIO_fileno(IoIFP(io));
                         if (fd < 0) {
                             PL_laststatval = -1;
+                            DEBUG_U(PerlIO_printf(Perl_debug_log, "%s: %d: fd=%d, PL_laststat_val=%d\n",__FILE__, __LINE__, fd, PL_laststatval));
                             SETERRNO(EBADF,RMS_IFI);
                         } else {
                             PL_laststatval = PerlLIO_fstat(fd, &PL_statcache);
+                            DEBUG_U(PerlIO_printf(Perl_debug_log, "%s: %d: fd=%d, PL_laststat_val=%d\n",__FILE__, __LINE__, fd, PL_laststatval));
                             havefp = TRUE;
                         }
                     } else if (IoDIRP(io)) {
                         PL_laststatval =
                             PerlLIO_fstat(my_dirfd(IoDIRP(io)), &PL_statcache);
+                        DEBUG_U(PerlIO_printf(Perl_debug_log, "%s: %d: my_dirfd=%d\n",__FILE__, __LINE__, my_dirfd(IoDIRP(io))));
+                        DEBUG_U(PerlIO_printf(Perl_debug_log, "%s: %d: PL_laststat_val=%d\n",__FILE__, __LINE__, PL_laststatval));
                         havefp = TRUE;
                     } else {
                         PL_laststatval = -1;
@@ -2876,6 +2882,7 @@ PP(pp_stat)
 
 	if (PL_laststatval < 0) {
 	    max = 0;
+            DEBUG_U(PerlIO_printf(Perl_debug_log, "%s: %d: max=%d\n",__FILE__, __LINE__, max));
 	}
     }
     else {
@@ -2904,10 +2911,12 @@ PP(pp_stat)
                 GCC_DIAG_RESTORE;
             }
 	    max = 0;
+            DEBUG_U(PerlIO_printf(Perl_debug_log, "%s: %d: max=%d\n",__FILE__, __LINE__, max));
 	}
     }
 
     gimme = GIMME_V;
+    DEBUG_U(PerlIO_printf(Perl_debug_log, "%s: %d: gimme=%d\n",__FILE__, __LINE__, gimme));
     if (gimme != G_ARRAY) {
 	if (gimme != G_VOID)
 	    XPUSHs(boolSV(max));

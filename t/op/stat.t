@@ -81,6 +81,7 @@ SKIP: {
     # stepped to see if it is returning a valid value.
     # FYI Calling sv_dump(sv) aborts
 
+    use warnings;
     ok(stat(DIR), "stat() on dirhandle works"); 
 }
 __END__
