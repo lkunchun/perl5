@@ -3255,12 +3255,7 @@ S_scan_const(pTHX_ char *start)
                  *  Otherwise must be some \N{NAME}: convert to \N{U+c1.c2...}
                  *      if a pattern; otherwise convert to utf8
                  *
-                 * If the regex compiler should ever need to differentiate
-                 * between the \N{U+...} and \N{name} forms, that could easily
-                 * be done here by stripping any leading zeros from the
-                 * \N{U+...} case, and adding them to the other one. */
-
-                /* Here, 's' points to the 'N'; the test below is guaranteed to
+                 * Here, 's' points to the 'N'; the test below is guaranteed to
 		 * succeed if we are being called on a pattern, as we already
                  * know from a test above that the next character is a '{'.  A
                  * non-pattern \N must mean 'named character', which requires
@@ -3393,9 +3388,15 @@ S_scan_const(pTHX_ char *start)
                                     char hex_string[4];
                                     int len =
                                         my_snprintf(hex_string,
-                                                    sizeof(hex_string),
-                                                    "%02X.", (U8) *str);
-                                    PERL_MY_SNPRINTF_POST_GUARD(len, sizeof(hex_string));
+                                                  sizeof(hex_string),
+                                                  "%02X.",
+
+                                                  /* The regex compiler is
+                                                   * expecting Unicode, not
+                                                   * native */
+                                                  (U8) NATIVE_TO_LATIN1(*str));
+                                    PERL_MY_SNPRINTF_POST_GUARD(len,
+                                                           sizeof(hex_string));
                                     Copy(hex_string, d, 3, char);
                                     d += 3;
                                     str++;
@@ -3419,12 +3420,12 @@ S_scan_const(pTHX_ char *start)
                                                         len,
                                                         &char_length,
                                                         UTF8_ALLOW_ANYUV);
-                                /* Convert first code point to hex, including
-                                 * the boiler plate before it. */
+                                /* Convert first code point to Unicode hex,
+                                 * including the boiler plate before it. */
                                 output_length =
                                     my_snprintf(hex_string, sizeof(hex_string),
-                                                "\\N{U+%X",
-                                                (unsigned int) uv);
+                                             "\\N{U+%X",
+                                             (unsigned int) NATIVE_TO_UNI(uv));
 
                                 /* Make sure there is enough space to hold it */
                                 d = off + SvGROW(sv, off
@@ -3436,7 +3437,7 @@ S_scan_const(pTHX_ char *start)
                                 d += output_length;
 
                                 /* For each subsequent character, append dot and
-                                * its ordinal in hex */
+                                * its Unicode code point in hex */
                                 while ((str += char_length) < str_end) {
                                     const STRLEN off = d - SvPVX_const(sv);
                                     U32 uv = utf8n_to_uvchr((U8 *) str,
@@ -3445,9 +3446,9 @@ S_scan_const(pTHX_ char *start)
                                                             UTF8_ALLOW_ANYUV);
                                     output_length =
                                         my_snprintf(hex_string,
-                                                    sizeof(hex_string),
-                                                    ".%X",
-                                                    (unsigned int) uv);
+                                             sizeof(hex_string),
+                                             ".%X",
+                                             (unsigned int) NATIVE_TO_UNI(uv));
 
                                     d = off + SvGROW(sv, off
                                                         + output_length

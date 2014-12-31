@@ -827,11 +827,11 @@ sub _can_do_level {
     # as a file path, never interpolating into the shell
     print STDERR __FILE__, ": ", __LINE__, ": fname=$fname\n";
     $! = 0;
-    my $sav_fname;
+    my $sav_fname = $fname;
     $fname = Cwd::abs_path($fname);
     unless ($fname) {
         my $errno = $!;
-        print STDERR __FILE__, ": ", __LINE__, ": Cwd::abs_path($sav_fname) returned nothing, errno=$errno\n";
+        print STDERR __FILE__, ": ", __LINE__, ": Cwd::abs_path($sav_fname) returned nothing, errno=", 0+$errno, "=$errno\n";
         $fname = $sav_fname if $sav_fname =~ m!^/!;
     }
 

@@ -254,7 +254,7 @@ perl_construct(pTHXx)
     JMPENV_BOOTSTRAP;
     STATUS_ALL_SUCCESS;
 
-    PERL_DEBUG(PerlIO_printf(Perl_debug_log, "\nabout it call initi18l10n\n"));
+    PERL_DEBUG(PerlIO_printf(Perl_debug_log, "\nabout it call initi18l10n, LC_ALL='%s', LANG='%s'\n", PerlEnv_getenv("LC_ALL"), PerlEnv_getenv("LANG")));
     init_i18nl10n(2);
     PERL_DEBUG(PerlIO_printf(Perl_debug_log, "\niniti18l10n returned\n"));
 

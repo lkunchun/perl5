@@ -181,6 +181,9 @@ struct RExC_state_t {
     I32		contains_locale;
     I32		contains_i;
     I32		override_recoding;
+#ifdef EBCDIC
+    I32		recode_x_to_native;
+#endif
     I32		in_multi_char_class;
     struct reg_code_block *code_blocks;	/* positions of literal (?{})
 					    within pattern */
@@ -256,6 +259,9 @@ struct RExC_state_t {
 #define RExC_contains_locale	(pRExC_state->contains_locale)
 #define RExC_contains_i (pRExC_state->contains_i)
 #define RExC_override_recoding (pRExC_state->override_recoding)
+#ifdef EBCDIC
+#   define RExC_recode_x_to_native (pRExC_state->recode_x_to_native)
+#endif
 #define RExC_in_multi_char_class (pRExC_state->in_multi_char_class)
 #define RExC_frame_head (pRExC_state->frame_head)
 #define RExC_frame_last (pRExC_state->frame_last)
@@ -6628,6 +6634,9 @@ Perl_re_op_compile(pTHX_ SV ** const patternp, int pat_count,
     RExC_seen_zerolen = *exp == '^' ? -1 : 0;
     RExC_extralen = 0;
     RExC_override_recoding = 0;
+#ifdef EBCDIC
+    RExC_recode_x_to_native = 0;
+#endif
     RExC_in_multi_char_class = 0;
 
     /* First pass: determine size, legality. */
@@ -11170,7 +11179,13 @@ S_grok_bslash_N(pTHX_ RExC_state_t *pRExC_state, regnode** node_p,
                               ? PERL_SCAN_SILENT_ILLDIGIT
                               : 0);
 
-	*valuep = grok_hex(RExC_parse, &length_of_hex, &grok_hex_flags, NULL);
+        /* This routine is the one place where both single- and double-quotish
+         * \N{U+xxxx} are evaluated.  The value is a Unicode code point which
+         * must be converted to native. */
+	*valuep = UNI_TO_NATIVE(grok_hex(RExC_parse,
+                                         &length_of_hex,
+                                         &grok_hex_flags,
+                                         NULL));
 
 	/* The tokenizer should have guaranteed validity, but it's possible to
          * bypass it by using single quoting, so check.  Don't do the check
@@ -11190,15 +11205,6 @@ S_grok_bslash_N(pTHX_ RExC_state_t *pRExC_state, regnode** node_p,
                 vFAIL("Invalid hexadecimal number in \\N{U+...}");
             }
 
-#ifdef EBCDIC
-            /* This is the one place where both single- and double-quotish
-             * \N{U+xxxx} are evaluated.  The value is a Unicode code point
-             * which must be converted to native.  Note that in the case of
-             * multiple \N{U+xxxx.yyyy...}, the names handler should be
-             * returning native values, so no translation is needed for that
-             * case below. */
-            *valuep = UNI_TO_NATIVE(*valuep);
-#endif
             RExC_parse = endbrace + 1;
             return 1;
         }
@@ -11220,9 +11226,9 @@ S_grok_bslash_N(pTHX_ RExC_state_t *pRExC_state, regnode** node_p,
          * and then either return it in <*substitute_parse> if non-null; or
          * call reg recursively to parse it (enclosing in "(?: ... )" ).  That
          * way, it retains its atomicness, while not having to worry about
-         * special handling that some code points may have.  toke.c has
-         * converted the original Unicode values to native, so that we can just
-         * pass on the hex values unchanged.  We do have to set a flag to keep
+         * special handling that some code points may have.
+         *
+         * We do have to set a flag to keep
          * recoding from happening in the recursion */
 
 	SV * dummy = NULL;
@@ -11265,8 +11271,13 @@ S_grok_bslash_N(pTHX_ RExC_state_t *pRExC_state, regnode** node_p,
 	}
 	RExC_end = RExC_parse + len;
 
-	/* The values are Unicode, and therefore not subject to recoding */
+        /* The values are Unicode, and therefore not subject to recoding, but
+         * have to be converted to native on a non-Unicode (meaning non-ASCII)
+         * platform. */
 	RExC_override_recoding = 1;
+#ifdef EBCDIC
+        RExC_recode_x_to_native = 1;
+#endif
 
         if (node_p) {
             if (!(*node_p = reg(pRExC_state, 1, &flags, depth+1))) {
@@ -11283,6 +11294,9 @@ S_grok_bslash_N(pTHX_ RExC_state_t *pRExC_state, regnode** node_p,
 	RExC_parse = endbrace;
 	RExC_end = orig_end;
 	RExC_override_recoding = 0;
+#ifdef EBCDIC
+        RExC_recode_x_to_native = 0;
+#endif
 
         nextchar(pRExC_state);
     }
@@ -12296,10 +12310,18 @@ S_regatom(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
 			    }
                             ender = result;
 
-			    if (IN_ENCODING && ender < 0x100) {
-				goto recode_encoding;
+                            if (ender < 0x100) {
+#ifdef EBCDIC
+                                if (RExC_recode_x_to_native) {
+                                    ender = LATIN1_TO_NATIVE(ender);
+                                }
+                                else
+#endif
+                                if (IN_ENCODING) {
+                                    goto recode_encoding;
+                                }
 			    }
-			    if (ender > 0xff) {
+                            else {
 				REQUIRE_UTF8;
 			    }
 			    break;
