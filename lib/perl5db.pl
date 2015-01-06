@@ -528,7 +528,7 @@ BEGIN {
 # Debugger for Perl 5.00x; perl5db.pl patch level:
 use vars qw($VERSION $header);
 
-$VERSION = '1.46';
+$VERSION = '1.47';
 
 $header = "perl5db.pl version $VERSION";
 
@@ -6737,24 +6737,24 @@ sub _db_system {
 
     # We save, change, then restore STDIN and STDOUT to avoid fork() since
     # some non-Unix systems can do system() but have problems with fork().
-    open( SAVEIN,  "<&STDIN" )  || db_warn("Can't save STDIN");
-    open( SAVEOUT, ">&STDOUT" ) || db_warn("Can't save STDOUT");
-    open( STDIN,   "<&IN" )     || db_warn("Can't redirect STDIN");
-    open( STDOUT,  ">&OUT" )    || db_warn("Can't redirect STDOUT");
+    open( SAVEIN,  "<&STDIN" )  || warn("Can't save STDIN");
+    open( SAVEOUT, ">&STDOUT" ) || warn("Can't save STDOUT");
+    open( STDIN,   "<&IN" )     || warn("Can't redirect STDIN");
+    open( STDOUT,  ">&OUT" )    || warn("Can't redirect STDOUT");
 
     # XXX: using csh or tcsh destroys sigint retvals!
     system(@_);
-    open( STDIN,  "<&SAVEIN" )  || db_warn("Can't restore STDIN");
-    open( STDOUT, ">&SAVEOUT" ) || db_warn("Can't restore STDOUT");
+    open( STDIN,  "<&SAVEIN" )  || warn("Can't restore STDIN");
+    open( STDOUT, ">&SAVEOUT" ) || warn("Can't restore STDOUT");
     close(SAVEIN);
     close(SAVEOUT);
 
     # most of the $? crud was coping with broken cshisms
     if ( $? >> 8 ) {
-        db_warn( "(Command exited ", ( $? >> 8 ), ")\n" );
+        warn( "(Command exited ", ( $? >> 8 ), ")\n" );
     }
     elsif ($?) {
-        db_warn(
+        warn(
             "(Command died of SIG#",
             ( $? & 127 ),
             ( ( $? & 128 ) ? " -- core dumped" : "" ),
