@@ -18,7 +18,7 @@ BEGIN {
 
 use strict;
 use Test;
-BEGIN { plan tests => 5, todo => [4,5] };
+BEGIN { plan tests => 5, todo => [4] };
 
 ok 1;
 
@@ -91,7 +91,7 @@ if( $guess ) {
 
 =head1 NAME
 
-=head2 JOS\xE9\x92S PLACE
+=head2 JOS\xC9\x92S PLACE
 
 =cut
 
