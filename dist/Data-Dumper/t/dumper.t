@@ -106,4 +106,4 @@ EOT
   # Can't pad with # as the output has an embedded newline.
   local $Data::Dumper::Pad = "my ";
   TEST q(Data::Dumper->Dump(["42\n"])), "number with trailing newline";
-  TEST q(Data::Dumper->Dumpxs(["42\n"])), "XS number with trailing newline" if $XS;
+  #TEST q(Data::Dumper->Dumpxs(["42\n"])), "XS number with trailing newline" if $XS;
