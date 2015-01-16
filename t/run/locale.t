@@ -292,7 +292,7 @@ EOF
     # LC_ALL or similar is set to an invalid value
 
     {
-        open my $saved_stderr, ">&STDERR" or die "Can't dup STDERR: $!";
+        #open my $saved_stderr, ">&STDERR" or die "Can't dup STDERR: $!";
         #close STDERR;
 
         {
@@ -310,6 +310,7 @@ EOF
                 }
                 use locale;
                 use POSIX qw(locale_h);
+                print STDERR "ENV{PERLIO}=", \$ENV{PERLIO}, "\n";
                 print STDERR "ENV{LC_ALL}=", \$ENV{LC_ALL}, "\n";
                 print STDERR "ENV{LC_NUMERIC}=", \$ENV{LC_NUMERIC}, "\n";
                 print STDERR "ENV{LANG}=", \$ENV{LANG}, "\n";
