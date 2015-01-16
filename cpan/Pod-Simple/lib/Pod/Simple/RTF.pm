@@ -195,9 +195,9 @@ sub do_middle {      # the main work
       $scratch =~
          s/(
             [^\cm\cj\n]{65}        # Snare 65 characters from a line
-            [^\cm\cj\n\x20]{0,50}  #  and finish any current word
+            [^\cm\cj\n ]{0,50}  #  and finish any current word
            )
-           (\x20{1,10})(?![\cm\cj\n]) # capture some spaces not at line-end
+           (\ {1,10})(?![\cm\cj\n]) # capture some spaces not at line-end
           /$1$2\n/gx     # and put a NL before those spaces
         if $WRAP;
         # This may wrap at well past the 65th column, but not past the 120th.
