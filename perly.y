@@ -603,9 +603,7 @@ myattrlist:	COLONATTR THING
 subsignature:	/* NULL */ { $$ = (OP*)NULL; }
 	|	'('
 			{
-			  if (!FEATURE_SIGNATURES_IS_ENABLED)
-			    Perl_croak(aTHX_ "Experimental "
-				"subroutine signatures not enabled");
+			  assert(FEATURE_SIGNATURES_IS_ENABLED);
 			  Perl_ck_warner_d(aTHX_
 				packWARN(WARN_EXPERIMENTAL__SIGNATURES),
 				"The signatures feature is experimental");
