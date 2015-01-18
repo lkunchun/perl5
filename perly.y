@@ -71,10 +71,10 @@
 %type <opval> sliceme kvslice gelem
 %type <opval> listexpr nexpr texpr iexpr mexpr mnexpr miexpr
 %type <opval> optlistexpr optexpr optrepl indirob listop method
-%type <opval> formname subname proto optsubbody cont my_scalar my_var
+%type <opval> formname subname proto_or_sig proto signature subbody cont my_scalar my_var
 %type <opval> refgen_topic formblock
 %type <opval> subattrlist myattrlist myattrterm myterm
-%type <opval> realsubbody subsignature termbinop termunop anonymous termdo
+%type <opval> termbinop termunop anonymous termdo
 %type <opval> formstmtseq formline formarg
 
 %nonassoc <ival> PREC_LOW
@@ -286,12 +286,29 @@ barestmt:	PLUGSTMT
 			  parser->in_my = 0;
 			  parser->in_my_stash = NULL;
 			}
-		proto subattrlist optsubbody
+		remember proto_or_sig subattrlist subbody
 			{
+			  OP *body;
+			  OP *proto;
+			  if ($6 && $6->op_type != OP_CONST) {
+			      if (!$8) {
+				  Perl_croak(aTHX_ "Signatures cannot be used in declarations");
+			      } else {
+				  body = block_end($5, op_append_list(OP_LINESEQ, $6, $8));
+				  proto = NULL;
+			      }
+			  } else {
+			      body = block_end($5, $8);
+			      if (!$8) {
+				  op_null(body);
+				  body = (OP*)NULL;
+			      }
+			      proto = $6;
+			  }
 			  SvREFCNT_inc_simple_void(PL_compcv);
 			  $2->op_type == OP_CONST
-			      ? newATTRSUB($3, $2, $5, $6, $7)
-			      : newMYSUB($3, $2, $5, $6, $7)
+			      ? newATTRSUB($3, $2, proto, $7, body)
+			      : newMYSUB($3, $2, proto, $7, body)
 			  ;
 			  $$ = (OP*)NULL;
 			  intro_my();
@@ -577,10 +594,33 @@ subname	:	WORD
 	|	PRIVATEREF
 	;
 
-/* Subroutine prototype */
-proto	:	/* NULL */
+/* Prototype or signature - they're in the same grammatical position, controlled by the feature */
+proto_or_sig	:	/* NULL */
 			{ $$ = (OP*)NULL; }
-	|	THING
+	|	proto
+	|	signature
+	;
+
+/* Subroutine prototype */
+proto	:	THING
+	;
+
+/* Optional subroutine signature */
+signature:
+		'('
+			{
+			  assert(FEATURE_SIGNATURES_IS_ENABLED);
+			  Perl_ck_warner_d(aTHX_
+				packWARN(WARN_EXPERIMENTAL__SIGNATURES),
+				"The signatures feature is experimental");
+			  $<opval>$ = parse_subsignature();
+			}
+		')'
+			{
+			  $$ = op_append_list(OP_LINESEQ, $<opval>2,
+				newSTATEOP(0, NULL, sawparens(newNULLLIST())));
+			  parser->expect = XATTRBLOCK;
+			}
 	;
 
 /* Optional list of subroutine attributes */
@@ -599,37 +639,11 @@ myattrlist:	COLONATTR THING
 			{ $$ = (OP*)NULL; }
 	;
 
-/* Optional subroutine signature */
-subsignature:	/* NULL */ { $$ = (OP*)NULL; }
-	|	'('
-			{
-			  assert(FEATURE_SIGNATURES_IS_ENABLED);
-			  Perl_ck_warner_d(aTHX_
-				packWARN(WARN_EXPERIMENTAL__SIGNATURES),
-				"The signatures feature is experimental");
-			  $<opval>$ = parse_subsignature();
+/* Subroutine body - either null or a block */
+subbody		:	block   { $$ = $1; }
+	|	';'	{ $$ = (OP*)NULL;
+			  PL_parser->expect = XSTATE;
 			}
-		')'
-			{
-			  $$ = op_append_list(OP_LINESEQ, $<opval>2,
-				newSTATEOP(0, NULL, sawparens(newNULLLIST())));
-			  parser->expect = XBLOCK;
-			}
-	;
-
-/* Subroutine body - block with optional signature */
-realsubbody:	remember subsignature '{' stmtseq '}'
-			{
-			  if (parser->copline > (line_t)$3)
-			      parser->copline = (line_t)$3;
-			  $$ = block_end($1,
-				op_append_list(OP_LINESEQ, $2, $4));
-			}
-	;
-
-/* Optional subroutine body, for named subroutine declaration */
-optsubbody:	realsubbody { $$ = $1; }
-	|	';'	{ $$ = (OP*)NULL; }
 	;
 
 /* Ordinary expressions; logical combinations */
@@ -835,9 +849,21 @@ anonymous:	'[' expr ']'
 			{ $$ = newANONHASH($2); }
 	|	HASHBRACK ';' '}'	%prec '(' /* { } (';' by tokener) */
 			{ $$ = newANONHASH((OP*)NULL); }
-	|	ANONSUB startanonsub proto subattrlist realsubbody	%prec '('
-			{ SvREFCNT_inc_simple_void(PL_compcv);
-			  $$ = newANONATTRSUB($2, $3, $4, $5); }
+	|	ANONSUB startanonsub remember proto_or_sig subattrlist '{' stmtseq '}' %prec '('
+			{ OP *body;
+			  OP *proto;
+			  SvREFCNT_inc_simple_void(PL_compcv);
+			  if (parser->copline > (line_t)$6)
+			      parser->copline = (line_t)$6;
+			  if ($4 && $4->op_type != OP_CONST) {
+			      body = block_end($3,
+				  op_append_list(OP_LINESEQ, $4, $7));
+			      proto = NULL;
+			  } else {
+			      body = block_end($3, $7);
+			      proto = $4;
+			  }
+			  $$ = newANONATTRSUB($2, proto, $5, body); }
 
     ;
 
