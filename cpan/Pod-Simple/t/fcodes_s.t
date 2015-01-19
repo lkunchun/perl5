@@ -10,7 +10,7 @@ use strict;
 use Test;
 BEGIN { plan tests => 80 };
 
-#use Pod::Simple::Debug (6);
+use Pod::Simple::Debug (6);
 
 ok 1;
 
