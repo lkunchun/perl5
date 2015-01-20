@@ -300,6 +300,11 @@ EOF
             local $ENV{LC_NUMERIC} = "invalid";
             local $ENV{LANG} = $different;
             local $ENV{PERL_BADLANG} = 0;
+            print STDERR "ENV{PERLIO}=", $ENV{PERLIO}, "\n";
+            print STDERR "ENV{LC_ALL}=", $ENV{LC_ALL}, "\n";
+            print STDERR "ENV{LC_NUMERIC}=", $ENV{LC_NUMERIC}, "\n";
+            print STDERR "ENV{LANG}=", $ENV{LANG}, "\n";
+            print STDERR "LC_NUMERIC=", $ENV{LC_NUMERIC}, "\n";
 
             if (! fresh_perl_is(<<"EOF", "$difference", { switches => ["-DUL"] },
                 if (\$ENV{LC_ALL} ne "invalid" || \$ENV{LC_NUMERIC} ne "invalid")
