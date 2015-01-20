@@ -430,12 +430,6 @@ use File::Glob qw(:case);
         ],
     },
 
-    'ExtUtils::Command' => {
-        'DISTRIBUTION' => 'BINGOS/ExtUtils-Command-1.20.tar.gz',
-        'FILES'        => q[cpan/ExtUtils-Command],
-        'EXCLUDED'     => [qr{^xt/}],
-    },
-
     'ExtUtils::Constant' => {
 
         # Nick has confirmed that while we have diverged from CPAN,
@@ -466,7 +460,7 @@ use File::Glob qw(:case);
     },
 
     'ExtUtils::MakeMaker' => {
-        'DISTRIBUTION' => 'BINGOS/ExtUtils-MakeMaker-7.04.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/ExtUtils-MakeMaker-7.05_08.tar.gz',
         'FILES'        => q[cpan/ExtUtils-MakeMaker],
         'EXCLUDED'     => [
             qr{^t/lib/Test/},
@@ -477,8 +471,6 @@ use File::Glob qw(:case);
             'PATCHING',
             'README.packaging',
         ],
-        # Applied upstream remove customisation when updating EUMM
-        'CUSTOMIZED'   => [ qw[ t/pm_to_blib.t ] ],
     },
 
     'ExtUtils::Manifest' => {

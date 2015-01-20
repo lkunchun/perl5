@@ -15,13 +15,13 @@ BEGIN {
 
 use File::Basename;
 
-our $VERSION = '7.04';
+our $VERSION = '7.05_08';
 
 require ExtUtils::MM_Any;
 require ExtUtils::MM_Unix;
 our @ISA = qw( ExtUtils::MM_Any ExtUtils::MM_Unix );
 
-use ExtUtils::MakeMaker qw($Verbose neatvalue);
+use ExtUtils::MakeMaker qw($Verbose neatvalue _sprintf562);
 our $Revision = $ExtUtils::MakeMaker::Revision;
 
 
@@ -884,13 +884,13 @@ sub c_o {
     return '' unless $self->needs_linking();
     '
 .c$(OBJ_EXT) :
-	$(CCCMD) $(CCCDLFLAGS) $(MMS$TARGET_NAME).c
+	$(CCCMD) $(CCCDLFLAGS) $(MMS$TARGET_NAME).c /OBJECT=$(MMS$TARGET_NAME)$(OBJ_EXT)
 
 .cpp$(OBJ_EXT) :
-	$(CCCMD) $(CCCDLFLAGS) $(MMS$TARGET_NAME).cpp
+	$(CCCMD) $(CCCDLFLAGS) $(MMS$TARGET_NAME).cpp /OBJECT=$(MMS$TARGET_NAME)$(OBJ_EXT)
 
 .cxx$(OBJ_EXT) :
-	$(CCCMD) $(CCCDLFLAGS) $(MMS$TARGET_NAME).cxx
+	$(CCCMD) $(CCCDLFLAGS) $(MMS$TARGET_NAME).cxx /OBJECT=$(MMS$TARGET_NAME)$(OBJ_EXT)
 
 ';
 }
@@ -906,7 +906,8 @@ sub xs_c {
     return '' unless $self->needs_linking();
     '
 .xs.c :
-	$(XSUBPPRUN) $(XSPROTOARG) $(XSUBPPARGS) $(MMS$TARGET_NAME).xs >$(MMS$TARGET)
+	$(XSUBPPRUN) $(XSPROTOARG) $(XSUBPPARGS) $(MMS$TARGET_NAME).xs >$(MMS$TARGET_NAME).xsc
+	$(MV) $(MMS$TARGET_NAME).xsc $(MMS$TARGET_NAME).c
 ';
 }
 
@@ -916,16 +917,40 @@ Use MM[SK] macros, and VMS command line for C compiler.
 
 =cut
 
-sub xs_o {	# many makes are too dumb to use xs_c then c_o
-    my($self) = @_;
+sub xs_o {
+    my ($self) = @_;
     return '' unless $self->needs_linking();
-    '
+    my $frag = '
 .xs$(OBJ_EXT) :
-	$(XSUBPPRUN) $(XSPROTOARG) $(XSUBPPARGS) $(MMS$TARGET_NAME).xs >$(MMS$TARGET_NAME).c
-	$(CCCMD) $(CCCDLFLAGS) $(MMS$TARGET_NAME).c
+	$(XSUBPPRUN) $(XSPROTOARG) $(XSUBPPARGS) $(MMS$TARGET_NAME).xs >$(MMS$TARGET_NAME).xsc
+	$(MV) $(MMS$TARGET_NAME).xsc $(MMS$TARGET_NAME).c
+	$(CCCMD) $(CCCDLFLAGS) $(MMS$TARGET_NAME).c /OBJECT=$(MMS$TARGET_NAME)$(OBJ_EXT)
 ';
+    if ($self->{XSMULTI}) {
+	for my $ext ($self->_xs_list_basenames) {
+	    my $version = $self->parse_version("$ext.pm");
+	    my $cccmd = $self->{CONST_CCCMD};
+	    $cccmd =~ m/^\s*CCCMD\s*=\s*(.*)\n/m;
+	    $cccmd = $1;
+	    $cccmd =~ s/\b(VERSION=)[^,\)]*/$1\\"$version\\"/;
+	    $cccmd =~ s/\b(XS_VERSION=)[^,\)]*/$1\\"$version\\"/;
+	    #                             1     2
+	    $frag .= _sprintf562 <<'EOF', $ext, $cccmd;
+
+%1$s$(OBJ_EXT) : %1$s.xs
+	$(XSUBPPRUN) $(XSPROTOARG) $(XSUBPPARGS) $(MMS$TARGET_NAME).xs > $(MMS$TARGET_NAME).xsc
+	$(MV) $(MMS$TARGET_NAME).xsc $(MMS$TARGET_NAME).c
+	%2$s $(CCCDLFLAGS) $(MMS$TARGET_NAME).c /OBJECT=$(MMS$TARGET_NAME)$(OBJ_EXT)
+EOF
+	}
+    }
+    $frag;
 }
 
+
+sub xs_dlsyms_ext {
+    '.opt';
+}
 
 =item dlsyms (override)
 
@@ -936,44 +961,55 @@ libraries to which it should be linked.
 =cut
 
 sub dlsyms {
-    my($self,%attribs) = @_;
+    my ($self, %attribs) = @_;
+    return '' unless $self->needs_linking;
+    $self->xs_dlsyms_iterator;
+}
 
-    return '' unless $self->needs_linking();
-
-    my($funcs) = $attribs{DL_FUNCS} || $self->{DL_FUNCS} || {};
-    my($vars)  = $attribs{DL_VARS}  || $self->{DL_VARS}  || [];
-    my($funclist)  = $attribs{FUNCLIST}  || $self->{FUNCLIST}  || [];
-    my(@m);
-
-    unless ($self->{SKIPHASH}{'dynamic'}) {
-	push(@m,'
-dynamic :: $(INST_ARCHAUTODIR)$(BASEEXT).opt
-	$(NOECHO) $(NOOP)
-');
-    }
-
-    push(@m,'
-static :: $(INST_ARCHAUTODIR)$(BASEEXT).opt
-	$(NOECHO) $(NOOP)
-') unless $self->{SKIPHASH}{'static'};
-
-    push @m,'
-$(INST_ARCHAUTODIR)$(BASEEXT).opt : $(BASEEXT).opt
+sub xs_make_dlsyms {
+    my ($self, $attribs, $target, $dep, $name, $dlbase, $funcs, $funclist, $imports, $vars, $extra) = @_;
+    my @m;
+    if ($self->{XSMULTI}) {
+	my ($v, $d, $f) = File::Spec->splitpath($target);
+	my @d = File::Spec->splitdir($d);
+	shift @d if $d[0] eq 'lib';
+	my $instloc = $self->catfile('$(INST_ARCHLIB)', 'auto', @d, $f);
+	push @m,"\ndynamic :: $instloc\n\t\$(NOECHO) \$(NOOP)\n"
+	  unless $self->{SKIPHASH}{'dynamic'};
+	push @m,"\nstatic :: $instloc\n\t\$(NOECHO) \$(NOOP)\n"
+	  unless $self->{SKIPHASH}{'static'};
+	push @m, sprintf <<'EOF', $instloc, $target;
+%s : %s
 	$(CP) $(MMS$SOURCE) $(MMS$TARGET)
-
-$(BASEEXT).opt : Makefile.PL
-	$(PERLRUN) -e "use ExtUtils::Mksymlists;" -
-	',qq[-e "Mksymlists('NAME' => '$self->{NAME}', 'DL_FUNCS' => ],
-	neatvalue($funcs),q[, 'DL_VARS' => ],neatvalue($vars),
-	q[, 'FUNCLIST' => ],neatvalue($funclist),qq[)"\n];
-
+EOF
+    } else {
+	push @m,"\ndynamic :: \$(INST_ARCHAUTODIR)$self->{BASEEXT}.opt\n\t\$(NOECHO) \$(NOOP)\n"
+	  unless $self->{SKIPHASH}{'dynamic'};
+	push @m,"\nstatic :: \$(INST_ARCHAUTODIR)$self->{BASEEXT}.opt\n\t\$(NOECHO) \$(NOOP)\n"
+	  unless $self->{SKIPHASH}{'static'};
+	push @m, sprintf <<'EOF', $target;
+$(INST_ARCHAUTODIR)$(BASEEXT).opt : %s
+	$(CP) $(MMS$SOURCE) $(MMS$TARGET)
+EOF
+    }
+    push @m,
+     "\n$target : $dep\n\t",
+     q!$(PERLRUN) -MExtUtils::Mksymlists -e "Mksymlists('NAME'=>'!, $name,
+     q!', 'DLBASE' => '!,$dlbase,
+     q!', 'DL_FUNCS' => !,neatvalue($funcs),
+     q!, 'FUNCLIST' => !,neatvalue($funclist),
+     q!, 'IMPORTS' => !,neatvalue($imports),
+     q!, 'DL_VARS' => !, neatvalue($vars);
+    push @m, $extra if defined $extra;
+    push @m, qq!);"\n\t!;
     push @m, '	$(PERL) -e "print ""$(INST_STATIC)/Include=';
-    if ($self->{OBJECT} =~ /\bBASEEXT\b/ or
+    if ($self->{XSMULTI}) {
+        push @m, uc($dlbase); # the "DLBASE" - is this right?
+    } elsif ($self->{OBJECT} =~ /\bBASEEXT\b/ or
         $self->{OBJECT} =~ /\b$self->{BASEEXT}\b/i) {
         push @m, ($Config{d_vms_case_sensitive_symbols}
 	           ? uc($self->{BASEEXT}) :'$(BASEEXT)');
-    }
-    else {  # We don't have a "main" object file, so pull 'em all in
+    } else {  # We don't have a "main" object file, so pull 'em all in
         # Upcase module names if linker is being case-sensitive
         my($upcase) = $Config{d_vms_case_sensitive_symbols};
         my(@omods) = split ' ', $self->eliminate_macros($self->{OBJECT});
@@ -983,7 +1019,6 @@ $(BASEEXT).opt : Makefile.PL
             s/.*[:>\/\]]//;       # Trim off dir spec
             $_ = uc if $upcase;
         };
-
         my(@lines);
         my $tmp = shift @omods;
         foreach my $elt (@omods) {
@@ -994,7 +1029,6 @@ $(BASEEXT).opt : Makefile.PL
         push @m, '(', join( qq[, -\\n\\t"";" >>\$(MMS\$TARGET)\n\t\$(PERL) -e "print ""], @lines),')';
     }
     push @m, '\n$(INST_STATIC)/Library\n"";" >>$(MMS$TARGET)',"\n";
-
     if (length $self->{LDLOADLIBS}) {
         my($line) = '';
         foreach my $lib (split ' ', $self->{LDLOADLIBS}) {
@@ -1007,9 +1041,19 @@ $(BASEEXT).opt : Makefile.PL
         }
         push @m, "\t\$(PERL) -e \"print qq{$line}\" >>\$(MMS\$TARGET)\n" if $line;
     }
+    join '', @m;
+}
 
-    join('',@m);
 
+=item xs_obj_opt
+
+Override to fixup -o flags.
+
+=cut
+
+sub xs_obj_opt {
+    my ($self, $output_file) = @_;
+    "/OBJECT=$output_file";
 }
 
 =item dynamic_lib (override)
@@ -1018,29 +1062,28 @@ Use VMS Link command.
 
 =cut
 
-sub dynamic_lib {
-    my($self, %attribs) = @_;
-    return '' unless $self->needs_linking(); #might be because of a subdir
+sub xs_dynamic_lib_macros {
+    my ($self, $attribs) = @_;
+    my $otherldflags = $attribs->{OTHERLDFLAGS} || "";
+    my $inst_dynamic_dep = $attribs->{INST_DYNAMIC_DEP} || "";
+    sprintf <<'EOF', $otherldflags, $inst_dynamic_dep;
+# This section creates the dynamically loadable objects from relevant
+# objects and possibly $(MYEXTLIB).
+OTHERLDFLAGS = %s
+INST_DYNAMIC_DEP = %s
+EOF
+}
 
-    return '' unless $self->has_link_code();
-
-    my($otherldflags) = $attribs{OTHERLDFLAGS} || "";
-    my($inst_dynamic_dep) = $attribs{INST_DYNAMIC_DEP} || "";
+sub xs_make_dynamic_lib {
+    my ($self, $attribs, $from, $to, $todir, $ldfrom, $exportlist) = @_;
     my $shr = $Config{'dbgprefix'} . 'PerlShr';
-    my(@m);
-    push @m,"
-
-OTHERLDFLAGS = $otherldflags
-INST_DYNAMIC_DEP = $inst_dynamic_dep
-
-";
-    push @m, '
-$(INST_DYNAMIC) : $(INST_STATIC) $(PERL_INC)perlshr_attr.opt $(INST_ARCHAUTODIR)$(DFSEP).exists $(EXPORT_LIST) $(PERL_ARCHIVE) $(INST_DYNAMIC_DEP)
-	If F$TrnLNm("',$shr,'").eqs."" Then Define/NoLog/User ',"$shr Sys\$Share:$shr.$Config{'dlext'}",'
-	Link $(LDFLAGS) /Shareable=$(MMS$TARGET)$(OTHERLDFLAGS) $(BASEEXT).opt/Option,$(PERL_INC)perlshr_attr.opt/Option
-';
-
-    join('',@m);
+    $exportlist =~ s/.def$/.opt/;  # it's a linker options file
+    #                    1    2       3            4     5
+    _sprintf562 <<'EOF', $to, $todir, $exportlist, $shr, "$shr Sys\$Share:$shr.$Config{'dlext'}";
+%1$s : $(INST_STATIC) $(PERL_INC)perlshr_attr.opt %2$s$(DFSEP).exists %3$s $(PERL_ARCHIVE) $(INST_DYNAMIC_DEP)
+	If F$TrnLNm("%4$s").eqs."" Then Define/NoLog/User %5$s
+	Link $(LDFLAGS) /Shareable=$(MMS$TARGET)$(OTHERLDFLAGS) %3$s/Option,$(PERL_INC)perlshr_attr.opt/Option
+EOF
 }
 
 
@@ -1615,7 +1658,7 @@ map_clean :
 
 =item maketext_filter (override)
 
-Insure that colons marking targets are preceded by space, in order
+Ensure that colons marking targets are preceded by space, in order
 to distinguish the target delimiter from a colon appearing as
 part of a filespec.
 
@@ -1777,7 +1820,7 @@ sub oneliner {
 =item B<echo>
 
 perl trips up on "<foo>" thinking it's an input redirect.  So we use the
-native Write command instead.  Besides, its faster.
+native Write command instead.  Besides, it's faster.
 
 =cut
 
@@ -2069,6 +2112,15 @@ sub is_make_type {
     my($self, $type) = @_;
     return 0;
 }
+
+
+=item make_type (override)
+
+Returns a suitable string describing the type of makefile being written.
+
+=cut
+
+sub make_type { "$Config{make}-style"; }
 
 
 =back

@@ -14,9 +14,9 @@ use File::Temp qw[tempdir];
 use MakeMaker::Test::Utils;
 use MakeMaker::Test::Setup::Recurs;
 use Config;
-use Test::More;
 use ExtUtils::MM;
-plan !MM->can_run(make()) && $ENV{PERL_CORE} && $Config{'usecrosscompile'}
+use Test::More
+    !MM->can_run(make()) && $ENV{PERL_CORE} && $Config{'usecrosscompile'}
     ? (skip_all => "cross-compiling and make not available")
     : (tests => 26);
 
@@ -27,10 +27,12 @@ delete @ENV{qw(PREFIX LIB MAKEFLAGS)};
 my $perl = which_perl();
 my $Is_VMS = $^O eq 'VMS';
 
-my $tmpdir = tempdir( DIR => 't', CLEANUP => 1 );
-chdir $tmpdir;
+chdir 't';
+perl_lib; # sets $ENV{PERL5LIB} relative to t/
 
-perl_lib;
+my $tmpdir = tempdir( DIR => '../t', CLEANUP => 1 );
+use Cwd; my $cwd = getcwd; END { chdir $cwd } # so File::Temp can cleanup
+chdir $tmpdir;
 
 my $Touch_Time = calibrate_mtime();
 

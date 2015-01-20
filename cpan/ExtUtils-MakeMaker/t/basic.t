@@ -20,9 +20,9 @@ use utf8;
 use MakeMaker::Test::Utils;
 use MakeMaker::Test::Setup::BFD;
 use Config;
-use Test::More;
 use ExtUtils::MM;
-plan !MM->can_run(make()) && $ENV{PERL_CORE} && $Config{'usecrosscompile'}
+use Test::More
+    !MM->can_run(make()) && $ENV{PERL_CORE} && $Config{'usecrosscompile'}
     ? (skip_all => "cross-compiling and make not available")
     : (tests => 171);
 use File::Find;
@@ -33,16 +33,34 @@ use File::Temp qw[tempdir];
 my $perl = which_perl();
 my $Is_VMS = $^O eq 'VMS';
 my $OLD_CP; # crude but...
+my $w32worked; # or whether we had to fallback to chcp
 if ($^O eq "MSWin32") {
-    $OLD_CP = $1 if qx(chcp) =~ /(\d+)$/ and $? == 0;
-    qx(chcp 1252) if defined $OLD_CP;
+    eval { require Win32; $w32worked = $OLD_CP = Win32::GetConsoleCP() };
+    $OLD_CP = $1 if !$w32worked and qx(chcp) =~ /(\d+)$/ and $? == 0;
+    if (defined $OLD_CP) {
+        if ($w32worked) {
+            Win32::SetConsoleCP(1252)
+        } else {
+            qx(chcp 1252);
+        }
+    }
 }
-END { qx(chcp $OLD_CP) if $^O eq "MSWin32" and defined $OLD_CP }
+END {
+    if ($^O eq "MSWin32" and defined $OLD_CP) {
+        if ($w32worked) {
+            Win32::SetConsoleCP($OLD_CP)
+        } else {
+            qx(chcp $OLD_CP);
+        }
+    }
+}
 
-my $tmpdir = tempdir( DIR => 't', CLEANUP => 1 );
+chdir 't';
+perl_lib; # sets $ENV{PERL5LIB} relative to t/
+
+my $tmpdir = tempdir( DIR => '../t', CLEANUP => 1 );
+use Cwd; my $cwd = getcwd; END { chdir $cwd } # so File::Temp can cleanup
 chdir $tmpdir;
-
-perl_lib;
 
 my $Touch_Time = calibrate_mtime();
 
@@ -247,8 +265,9 @@ my $mymeta_yml = "$distdir/MYMETA.yml";
 my $meta_json = "$distdir/META.json";
 my $mymeta_json = "$distdir/MYMETA.json";
 
-note "META file validity"; {
-    require CPAN::Meta;
+note "META file validity"; SKIP: {
+    eval { require CPAN::Meta; };
+    skip 'Loading CPAN::Meta failed', 104 if $@;
 
     ok( !-f 'META.yml',  'META.yml not written to source dir' );
     ok( -f $meta_yml,    'META.yml written to dist dir' );

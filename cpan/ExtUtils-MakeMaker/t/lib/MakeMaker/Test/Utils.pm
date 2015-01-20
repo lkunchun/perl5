@@ -3,6 +3,10 @@ package MakeMaker::Test::Utils;
 use File::Spec;
 use strict;
 use Config;
+use Cwd qw(getcwd);
+use Carp qw(croak);
+use File::Path;
+use File::Basename;
 
 require Exporter;
 our @ISA = qw(Exporter);
@@ -16,6 +20,7 @@ our @EXPORT = qw(which_perl perl_lib makefile_name makefile_backup
                  have_compiler slurp
                  $Is_VMS $Is_MacOS
                  run_ok
+                 hash2files
                 );
 
 
@@ -155,6 +160,9 @@ Sets up environment variables so perl can find its libraries.
 my $old5lib = $ENV{PERL5LIB};
 my $had5lib = exists $ENV{PERL5LIB};
 sub perl_lib {
+    my $basecwd = (File::Spec->splitdir(getcwd))[-1];
+    croak "Basename of cwd needs to be 't' but is '$basecwd'\n"
+        unless $basecwd eq 't';
                                # perl-src/t/
     my $lib =  $ENV{PERL_CORE} ? qq{../lib}
                                # ExtUtils-MakeMaker/t/
@@ -345,23 +353,11 @@ Returns true if there is a compiler available for XS builds.
 
 sub have_compiler {
     my $have_compiler = 0;
-
-    # ExtUtils::CBuilder prints its compilation lines to the screen.
-    # Shut it up.
-    use TieOut;
-    local *STDOUT = *STDOUT;
-    local *STDERR = *STDERR;
-
-    tie *STDOUT, 'TieOut';
-    tie *STDERR, 'TieOut';
-
     eval {
-	require ExtUtils::CBuilder;
-	my $cb = ExtUtils::CBuilder->new;
-
-	$have_compiler = $cb->have_compiler;
+        require ExtUtils::CBuilder;
+        my $cb = ExtUtils::CBuilder->new(quiet=>1);
+        $have_compiler = $cb->have_compiler;
     };
-
     return $have_compiler;
 }
 
@@ -384,6 +380,31 @@ sub slurp {
     close $fh;
 
     return $text;
+}
+
+=item hash2files
+
+  hash2files('dirname', { 'filename' => 'some content' });
+
+Goes through given hash-ref, treating each key as a /-separated filename
+under the specified directory, and writing the value into it. Will create
+any necessary directories.
+
+Will die if errors occur.
+
+=cut
+
+sub hash2files {
+    my ($prefix, $hashref) = @_;
+    while(my ($file, $text) = each %$hashref) {
+        # Convert to a relative, native file path.
+        $file = File::Spec->catfile(File::Spec->curdir, $prefix, split m{\/}, $file);
+        my $dir = dirname($file);
+        mkpath $dir;
+        open FILE, ">$file" or die "Can't create $file: $!";
+        print FILE $text;
+        close FILE;
+    }
 }
 
 =back

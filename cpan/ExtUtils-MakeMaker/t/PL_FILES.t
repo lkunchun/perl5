@@ -11,17 +11,19 @@ use File::Temp qw[tempdir];
 use MakeMaker::Test::Setup::PL_FILES;
 use MakeMaker::Test::Utils;
 use Config;
-use Test::More;
 use ExtUtils::MM;
-plan !MM->can_run(make()) && $ENV{PERL_CORE} && $Config{'usecrosscompile'}
+use Test::More
+    !MM->can_run(make()) && $ENV{PERL_CORE} && $Config{'usecrosscompile'}
     ? (skip_all => "cross-compiling and make not available")
     : (tests => 9);
 
 my $perl = which_perl();
 my $make = make_run();
-perl_lib();
+chdir 't';
+perl_lib; # sets $ENV{PERL5LIB} relative to t/
 
-my $tmpdir = tempdir( DIR => 't', CLEANUP => 1 );
+my $tmpdir = tempdir( DIR => '../t', CLEANUP => 1 );
+use Cwd; my $cwd = getcwd; END { chdir $cwd } # so File::Temp can cleanup
 chdir $tmpdir;
 
 setup;
