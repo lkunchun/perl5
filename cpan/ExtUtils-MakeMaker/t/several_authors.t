@@ -13,15 +13,16 @@ use TieOut;
 use MakeMaker::Test::Utils;
 use MakeMaker::Test::Setup::SAS;
 use Config;
-use Test::More;
 use ExtUtils::MM;
-plan !MM->can_run(make()) && $ENV{PERL_CORE} && $Config{'usecrosscompile'}
+use Test::More
+    !MM->can_run(make()) && $ENV{PERL_CORE} && $Config{'usecrosscompile'}
     ? (skip_all => "cross-compiling and make not available")
     : (tests => 20);
 use File::Path;
 use File::Temp qw[tempdir];
 
 use ExtUtils::MakeMaker;
+my $CM = eval { require CPAN::Meta; };
 
 # avoid environment variables interfering with our make runs
 delete @ENV{qw(LIB MAKEFLAGS)};
@@ -30,10 +31,12 @@ my $perl     = which_perl();
 my $make     = make_run();
 my $makefile = makefile_name();
 
-my $tmpdir = tempdir( DIR => 't', CLEANUP => 1 );
-chdir $tmpdir;
+chdir 't';
+perl_lib; # sets $ENV{PERL5LIB} relative to t/
 
-perl_lib();
+my $tmpdir = tempdir( DIR => '../t', CLEANUP => 1 );
+use Cwd; my $cwd = getcwd; END { chdir $cwd } # so File::Temp can cleanup
+chdir $tmpdir;
 
 ok( setup_recurs(), 'setup' );
 END {
@@ -111,14 +114,15 @@ note "ppd output"; {
 }
 
 
-note "META.yml output"; {
+note "META.yml output"; SKIP: {
+    skip 'Failed to load CPAN::Meta', 5 unless $CM;
     my $distdir  = 'Multiple-Authors-0.05';
     $distdir =~ s{\.}{_}g if $Is_VMS;
 
     my $meta_yml = "$distdir/META.yml";
     my $meta_json = "$distdir/META.json";
     my @make_out    = run(qq{$make metafile});
-    END { rmtree $distdir }
+    END { rmtree $distdir if defined $distdir }
 
     cmp_ok( $?, '==', 0, 'Make metafile exiting normally' ) || diag(@make_out);
 
