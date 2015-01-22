@@ -228,14 +228,16 @@ sub x ($) {
     )
 }
 
+my $colon = sprintf("%%%2X", ord ":");
+
 ok(
     x(qq{L<Net::Ping>\n}),
-    qq{\n<p><a href="$PERLDOC?Net%3A%3APing" class="podlinkpod"\n>Net::Ping</a></p>\n}
+    qq{\n<p><a href="$PERLDOC?Net${colon}${colon}Ping" class="podlinkpod"\n>Net::Ping</a></p>\n}
 );
 
 ok(
     x(qq{Be sure to read the L<Net::Ping> docs\n}),
-    qq{\n<p>Be sure to read the <a href="$PERLDOC?Net%3A%3APing" class="podlinkpod"\n>Net::Ping</a> docs</p>\n}
+    qq{\n<p>Be sure to read the <a href="$PERLDOC?Net${colon}${colon}Ping" class="podlinkpod"\n>Net::Ping</a> docs</p>\n}
 );
 
 ok(
@@ -250,7 +252,7 @@ ok(
 
 ok(
     x(qq{L<Net::Ping/Ping-pong>\n}),
-    qq{\n<p><a href="$PERLDOC?Net%3A%3APing#Ping-pong" class="podlinkpod"\n>&#34;Ping-pong&#34; in Net::Ping</a></p>\n}
+    qq{\n<p><a href="$PERLDOC?Net${colon}${colon}Ping#Ping-pong" class="podlinkpod"\n>&#34;Ping-pong&#34; in Net::Ping</a></p>\n}
 );
 
 ok(
@@ -270,7 +272,7 @@ ok(
 
 ok(
     x(qq{L<Net::Ping/Ping-E<112>ong>\n}),
-    qq{\n<p><a href="$PERLDOC?Net%3A%3APing#Ping-pong" class="podlinkpod"\n>&#34;Ping-pong&#34; in Net::Ping</a></p>\n}
+    qq{\n<p><a href="$PERLDOC?Net${colon}${colon}Ping#Ping-pong" class="podlinkpod"\n>&#34;Ping-pong&#34; in Net::Ping</a></p>\n}
 );
 
 ok(
