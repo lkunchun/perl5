@@ -37,6 +37,7 @@ sub source_path {
         require File::Spec;
         my $updir = File::Spec->updir;
         my $dir = File::Spec->catdir($updir, 'lib', 'Pod', 'Simple', 't');
+        print STDERR __FILE__, ": ", __LINE__, ": ", File::Spec->catdir($updir, 'lib', 'Pod', 'Simple', 't', $file), "\n";
         return File::Spec->catdir ($dir, $file);
     } else {
         return $file;
@@ -73,6 +74,7 @@ if(     -e ($ascii_order = source_path('ascii_order.pl'))) {
 } elsif(-e ($ascii_order = File::Spec->catdir($cwd, 't', 'ascii_order.pl'))) {
   #
 } else {
+    print STDERR __FILE__, ": ", __LINE__, ":  curdir=", $cwd, "; ", File::Spec->catdir($cwd, 't', 'ascii_order.pl'), "\n";
   die "Can't find ascii_order.pl";
 }
 
