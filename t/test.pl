@@ -722,6 +722,9 @@ sub _create_runperl { # Create the string to qx in runperl().
     elsif ($args{stderr}) {
         $runperl = $runperl . ' 2>&1';
     }
+    if ($args{khw_debug}) {
+        $runperl = "echo \"PERLIO=\$PERLIO; LC_ALL=\$LC_ALL; LC_NUMERIC=\$LC_NUMERIC; LANG=\$LANG; LC_NUMERIC=\$LC_NUMERIC\" >&2; $runperl";
+    }
     if ($args{verbose}) {
 	my $runperldisplay = $runperl;
 	$runperldisplay =~ s/\n/\n\#/g;
