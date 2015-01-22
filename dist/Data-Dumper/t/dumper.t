@@ -99,7 +99,7 @@ BEGIN { $^D = 1179649;  }
 ############# 310
 ## Perl code was using /...$/ and hence missing the \n.
   $WANT = <<'EOT';
-my $VAR1 = '42
+my $VAR1 = '52
 ';
 EOT
 
