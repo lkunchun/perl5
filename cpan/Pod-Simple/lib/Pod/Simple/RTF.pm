@@ -176,7 +176,7 @@ sub do_middle {      # the main work
        s/(?:
            ^
            |
-           (?<=[\cm\cj\t "\[\<\(])
+           (?<=[\r\n\t "\[\<\(])
          )   # start on whitespace, sequence-start, or quote
          ( # something looking like a Perl token:
           (?:
@@ -185,7 +185,7 @@ sub do_middle {      # the main work
           |
           # or starting alpha, but containing anything strange:
           (?:
-           [a-zA-Z'\x80-\xFF]+[\$\@\:_<>\(\\\*]\S+
+           [a-zA-Z'[:^ascii:]]+[\$\@\:_<>\(\\\*]\S+
           )
          )
         /\cb$1\cc/xsg
@@ -194,10 +194,10 @@ sub do_middle {      # the main work
       rtf_esc($scratch);
       $scratch =~
          s/(
-            [^\cm\cj\n]{65}        # Snare 65 characters from a line
-            [^\cm\cj\n ]{0,50}  #  and finish any current word
+            [^\r\n]{65}        # Snare 65 characters from a line
+            [^\r\n ]{0,50}     #  and finish any current word
            )
-           (\ {1,10})(?![\cm\cj\n]) # capture some spaces not at line-end
+           (\ {1,10})(?![\r\n]) # capture some spaces not at line-end
           /$1$2\n/gx     # and put a NL before those spaces
         if $WRAP;
         # This may wrap at well past the 65th column, but not past the 120th.
@@ -300,7 +300,7 @@ sub do_middle {      # the main work
       if ($tagname eq 'item-number') {
         print $fh $token->attr('number'), ". \n";
       } elsif ($tagname eq 'item-bullet') {
-        print $fh "\\'95 \n";
+        print $fh "\\'", utf8::unicode_to_native(0x95), "\n";
         #for funky testing: print $fh '', rtf_esc("\x{4E4B}\x{9053}");
       }
 
@@ -483,19 +483,19 @@ sub rtf_esc {
   my $x; # scratch
   if(!defined wantarray) { # void context: alter in-place!
     for(@_) {
-      s/([F\x00-\x1F\-\\\{\}\x7F-\xFF])/$Escape{$1}/g;  # ESCAPER
+      s/([F[:cntrl:]\-\\\{\}[:^ascii:]])/$Escape{$1}/g;  # ESCAPER
       s/([^\x00-\xFF])/'\\uc1\\u'.((ord($1)<32768)?ord($1):(ord($1)-65536)).'?'/eg;
     }
     return;
   } elsif(wantarray) {  # return an array
     return map {; ($x = $_) =~
-      s/([F\x00-\x1F\-\\\{\}\x7F-\xFF])/$Escape{$1}/g;  # ESCAPER
+      s/([F[:cntrl:]\-\\\{\}[:^ascii:]])/$Escape{$1}/g;  # ESCAPER
       $x =~ s/([^\x00-\xFF])/'\\uc1\\u'.((ord($1)<32768)?ord($1):(ord($1)-65536)).'?'/eg;
       $x;
     } @_;
   } else { # return a single scalar
     ($x = ((@_ == 1) ? $_[0] : join '', @_)
-    ) =~ s/([F\x00-\x1F\-\\\{\}\x7F-\xFF])/$Escape{$1}/g;  # ESCAPER
+    ) =~ s/([F[:cntrl:]\-\\\{\}[:^ascii:]])/$Escape{$1}/g;  # ESCAPER
              # Escape \, {, }, -, control chars, and 7f-ff.
     $x =~ s/([^\x00-\xFF])/'\\uc1\\u'.((ord($1)<32768)?ord($1):(ord($1)-65536)).'?'/eg;
     return $x;
@@ -512,19 +512,19 @@ sub rtf_esc_codely {
   my $x; # scratch
   if(!defined wantarray) { # void context: alter in-place!
     for(@_) {
-      s/([F\x00-\x1F\\\{\}\x7F-\xFF])/$Escape{$1}/g;  # ESCAPER
+      s/([F[:cntrl:]\\\{\}[:^ascii:]])/$Escape{$1}/g;  # ESCAPER
       s/([^\x00-\xFF])/'\\uc1\\u'.((ord($1)<32768)?ord($1):(ord($1)-65536)).'?'/eg;
     }
     return;
   } elsif(wantarray) {  # return an array
     return map {; ($x = $_) =~
-      s/([F\x00-\x1F\\\{\}\x7F-\xFF])/$Escape{$1}/g;  # ESCAPER
+      s/([F[:cntrl:]\\\{\}[:^ascii:]])/$Escape{$1}/g;  # ESCAPER
       $x =~ s/([^\x00-\xFF])/'\\uc1\\u'.((ord($1)<32768)?ord($1):(ord($1)-65536)).'?'/eg;
       $x;
     } @_;
   } else { # return a single scalar
     ($x = ((@_ == 1) ? $_[0] : join '', @_)
-    ) =~ s/([F\x00-\x1F\\\{\}\x7F-\xFF])/$Escape{$1}/g;  # ESCAPER
+    ) =~ s/([F[:cntrl:]\\\{\}[:^ascii:]])/$Escape{$1}/g;  # ESCAPER
              # Escape \, {, }, -, control chars, and 7f-ff.
     $x =~ s/([^\x00-\xFF])/'\\uc1\\u'.((ord($1)<32768)?ord($1):(ord($1)-65536)).'?'/eg;
     return $x;
@@ -532,9 +532,9 @@ sub rtf_esc_codely {
 }
 
 %Escape = (
-  map( (chr($_),chr($_)),       # things not apparently needing escaping
+  map( (chr(utf8::unicode_to_native($_)),chr(utf8::unicode_to_native($_))),       # things not apparently needing escaping
        0x20 .. 0x7E ),
-  map( (chr($_),sprintf("\\'%02x", $_)),    # apparently escapeworthy things
+  map( (chr($_),sprintf("\\'%02x", utf8::unicode_to_native($_))),    # apparently escapeworthy things
        0x00 .. 0x1F, 0x5c, 0x7b, 0x7d, 0x7f .. 0xFF, 0x46),
 
   # We get to escape out 'F' so that we can send RTF files thru the mail
@@ -542,15 +542,15 @@ sub rtf_esc_codely {
   # will get munged.
 
   # And some refinements:
-  "\cm"  => "\n",
-  "\cj"  => "\n",
+  "\r"  => "\n",
+  #"\cj"  => "\n",
   "\n"   => "\n\\line ",
 
   "\t"   => "\\tab ",     # Tabs (altho theoretically raw \t's are okay)
   "\f"   => "\n\\page\n", # Formfeed
   "-"    => "\\_",        # Turn plaintext '-' into a non-breaking hyphen
-  "\xA0" => "\\~",        # Latin-1 non-breaking space
-  "\xAD" => "\\-",        # Latin-1 soft (optional) hyphen
+  $Pod::Simple::nbsp => "\\~",        # Latin-1 non-breaking space
+  $Pod::Simple::shy => "\\-",        # Latin-1 soft (optional) hyphen
 
   # CRAZY HACKS:
   "\n" => "\\line\n",
