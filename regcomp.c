@@ -15012,7 +15012,7 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
                 if (prevvalue == 'A') {
                     if (value == 'Z'
 #ifdef EBCDIC
-                        && ! non_portable_end_point
+                        && ! non_portable_endpoint
 #endif
                     ) {
                         arg = (FOLD) ? _CC_ALPHA : _CC_UPPER;
@@ -15022,7 +15022,7 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
                 else if (prevvalue == 'a') {
                     if (value == 'z'
 #ifdef EBCDIC
-                        && ! non_portable_end_point
+                        && ! non_portable_endpoint
 #endif
                     ) {
                         arg = (FOLD) ? _CC_ALPHA : _CC_LOWER;
