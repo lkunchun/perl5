@@ -408,6 +408,8 @@ sub _perl_abs_path
 	return '';
     }
 
+    print STDERR "Using Pure Perl abs_path()\n";
+
     unless (-d _) {
         # Make sure we can be invoked on plain files, not just directories.
         # NOTE that this routine assumes that '/' is the only directory separator.

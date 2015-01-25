@@ -9,6 +9,8 @@ use ExtUtils::ParseXS::Utilities qw(
   process_typemaps
 );
 
+$^D = 4096;
+
 my $startdir  = cwd();
 {
     my ($type_kind_ref, $proto_letter_ref, $input_expr_ref, $output_expr_ref);
