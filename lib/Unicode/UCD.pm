@@ -2027,9 +2027,9 @@ will return C<undef> if called with one of those.
 our %loose_to_standard_value;
 our %prop_value_aliases;
 
-sub prop_value_aliases ($$) {
-    my ($prop, $value) = @_;
-    return unless defined $prop && defined $value;
+sub prop_value_aliases ($;$) {
+    my $prop = shift;
+    return unless defined $prop;
 
     require "unicore/UCD.pl";
     require "utf8_heavy.pl";
@@ -2040,12 +2040,29 @@ sub prop_value_aliases ($$) {
     return if ! $prop;
     $prop = utf8::_loose_name(lc $prop);
 
-    # Here is a legal property, but the hash below (created by mktables for
-    # this purpose) only knows about the properties that have a very finite
-    # number of potential values, that is not ones whose value could be
-    # anything, like most (if not all) string properties.  These don't have
-    # synonyms anyway.  Simply return the input.  For example, there is no
-    # synonym for ('Uppercase_Mapping', A').
+    # Here is a legal property.  If called with a single argument, create and
+    # return a list of the short forms of each of its property values.
+    if (! @_) {
+        croak __PACKAGE__, "::prop_value_aliases: must be called without a second parameter in list context" unless wantarray;
+        return unless exists $prop_value_aliases{$prop};
+        my @return;
+        foreach my $value_key (sort { $a cmp $b }
+                                            keys %{$prop_value_aliases{$prop}})
+        {
+            push @return, $prop_value_aliases{$prop}{$value_key}[0];
+        }
+        return @return;
+    }
+
+    # Here, is the two-argument form.  Find all synonyms of the second
+    # argument
+    my $value = shift;
+
+    # The hash below (created by mktables for this purpose) only knows about
+    # the properties that have a very finite number of potential values, that
+    # is, not ones whose value could be anything, like most (if not all) string
+    # properties.  These don't have synonyms anyway.  Simply return the input.
+    # For example, there is no synonym for ('Uppercase_Mapping', A').
     return $value if ! exists $prop_value_aliases{$prop};
 
     # The value name may be loosely or strictly matched; we don't know yet.
