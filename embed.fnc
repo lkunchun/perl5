@@ -2272,6 +2272,9 @@ Es	|void	|to_utf8_substr	|NN regexp * prog
 Es	|bool	|to_byte_substr	|NN regexp * prog
 ERsn	|I32	|reg_check_named_buff_matched	|NN const regexp *rex \
 						|NN const regnode *scan
+iER	|PL_GCB_enum|getGCB_val_cp|UV cp
+iER	|PL_GCB_enum|getGCB_val_utf8|NN const U8 * pos|NN const U8 * eol
+EsnR	|bool	|isGCB		|const PL_GCB_enum before|const PL_GCB_enum after
 #  ifdef DEBUGGING
 Es	|void	|dump_exec_pos	|NN const char *locinput|NN const regnode *scan|NN const char *loc_regeol\
 				|NN const char *loc_bostr|NN const char *loc_reg_starttry|const bool do_utf8

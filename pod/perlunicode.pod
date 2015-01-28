@@ -1575,8 +1575,9 @@ regular expressions outside the scope.
 
 =item *
 
-Matching any of several properties in regular expressions, namely C<\b>,
-C<\B>, C<\s>, C<\S>, C<\w>, C<\W>, and all the Posix character classes
+Matching any of several properties in regular expressions, namely
+C<\b> (without braces), C<\B> (without braces), C<\s>, C<\S>, C<\w>,
+C<\W>, and all the Posix character classes
 I<except> C<[[:ascii:]]>.
 Starting in Perl 5.14.0, regular expressions compiled within
 the scope of C<unicode_strings> use character semantics

@@ -1052,8 +1052,11 @@
 #  endif
 #  if defined(PERL_IN_REGEXEC_C)
 #define find_byclass(a,b,c,d,e)	S_find_byclass(aTHX_ a,b,c,d,e)
+#define getGCB_val_cp(a)	S_getGCB_val_cp(aTHX_ a)
+#define getGCB_val_utf8(a,b)	S_getGCB_val_utf8(aTHX_ a,b)
 #define isFOO_lc(a,b)		S_isFOO_lc(aTHX_ a,b)
 #define isFOO_utf8_lc(a,b)	S_isFOO_utf8_lc(aTHX_ a,b)
+#define isGCB			S_isGCB
 #define reg_check_named_buff_matched	S_reg_check_named_buff_matched
 #define regcppop(a,b)		S_regcppop(aTHX_ a,b)
 #define regcppush(a,b,c)	S_regcppush(aTHX_ a,b,c)

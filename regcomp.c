@@ -87,7 +87,6 @@ EXTERN_C const struct regexp_engine my_reg_engine;
 #endif
 
 #include "dquote_static.c"
-#include "charclass_invlists.h"
 #include "inline_invlist.c"
 #include "unicode_constants.h"
 
@@ -11764,27 +11763,82 @@ S_regatom(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
             invert = 1;
             /* FALLTHROUGH */
 	case 'b':
+          {
+	    regex_charset charset = get_regex_charset(RExC_flags);
+
 	    RExC_seen_zerolen++;
             RExC_seen |= REG_LOOKBEHIND_SEEN;
-	    op = BOUND + get_regex_charset(RExC_flags);
-            if (op > BOUNDA) {  /* /aa is same as /a */
-                op = BOUNDA;
-            }
-            else if (op == BOUNDL) {
-                RExC_contains_locale = 1;
-            }
+	    op = BOUND + charset;
 
-            if (invert) {
-                op += NBOUND - BOUND;
+            if (op == BOUNDL) {
+                RExC_contains_locale = 1;
             }
 
 	    ret = reg_node(pRExC_state, op);
 	    *flagp |= SIMPLE;
-	    if ((U8) *(RExC_parse + 1) == '{') {
-                /* diag_listed_as: Use "%s" instead of "%s" */
-	        vFAIL3("Use \"\\%c\\{\" instead of \"\\%c{\"", *RExC_parse, *RExC_parse);
+	    if (*(RExC_parse + 1) != '{') {
+                FLAGS(ret) = TRADITIONAL_BOUND;
+                if (PASS2 && op > BOUNDA) {  /* /aa is same as /a */
+                    OP(ret) = BOUNDA;
+                }
+            }
+            else {
+                STRLEN length;
+                char name = *RExC_parse;
+                char * endbrace;
+                RExC_parse += 2;
+                endbrace = strchr(RExC_parse, '}');
+
+                if (! endbrace) {
+                    vFAIL2("Missing right brace on \\%c{}", name);
+                }
+                while (isSPACE(*RExC_parse)) {
+                    RExC_parse++;
+                }
+                if (endbrace == RExC_parse) {
+                    vFAIL2("Empty \\%c{}", name);
+                }
+                length = endbrace - RExC_parse;
+                while (isSPACE(*(RExC_parse + length - 1))) {
+                    length--;
+                }
+                switch (*RExC_parse) {
+                    case 'g':
+                        if (length != 1
+                            && (length != 3 || strnNE(RExC_parse, "gcb", 3)))
+                        {
+                            goto bad_bound_type;
+                        }
+                        FLAGS(ret) = GCB_BOUND;
+                        break;
+                    default:
+                      bad_bound_type:
+                        length += 3;
+                        vFAIL3("'%.*s' is an unknown bound type",
+                                          length + 1, endbrace - length);
+                        NOT_REACHED; /*NOTREACHED*/
+                }
+                RExC_parse = endbrace;
+                RExC_uni_semantics = 1;
+
+                if (PASS2 && op >= BOUNDA) {  /* /aa is same as /a */
+                    OP(ret) = BOUNDU;
+                    length += 4;
+                    ckWARN4reg(RExC_parse,
+                              "Using /u for '%.*s' instead of /%s",
+                              (unsigned) length,
+                              endbrace - length + 1,
+                              (charset == REGEX_ASCII_RESTRICTED_CHARSET)
+                              ? ASCII_RESTRICT_PAT_MODS
+                              : ASCII_MORE_RESTRICT_PAT_MODS);
+                }
 	    }
+
+            if (PASS2 && invert) {
+                OP(ret) += NBOUND - BOUND;
+            }
 	    goto finish_meta_pat;
+          }
 
 	case 'D':
             invert = 1;
@@ -16702,6 +16756,13 @@ Perl_regprop(pTHX_ const regexp *prog, SV *sv, const regnode *o, const regmatch_
         else {
             Perl_sv_catpvf(aTHX_ sv, "[illegal type=%d])", index);
         }
+    }
+    else if (k == BOUND || k == NBOUND) {
+        const char * const bounds[] = {
+            "",
+            "{gcb}"
+        };
+        sv_catpv(sv, bounds[FLAGS(o)]);
     }
     else if (k == BRANCHJ && (OP(o) == UNLESSM || OP(o) == IFMATCH))
 	Perl_sv_catpvf(aTHX_ sv, "[%d]", -(o->flags));

@@ -7423,6 +7423,16 @@ STATIC char*	S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s, cons
 #define PERL_ARGS_ASSERT_FIND_BYCLASS	\
 	assert(prog); assert(c); assert(s); assert(strend)
 
+PERL_STATIC_INLINE PL_GCB_enum	S_getGCB_val_cp(pTHX_ UV cp)
+			__attribute__warn_unused_result__;
+
+PERL_STATIC_INLINE PL_GCB_enum	S_getGCB_val_utf8(pTHX_ const U8 * pos, const U8 * eol)
+			__attribute__warn_unused_result__
+			__attribute__nonnull__(pTHX_1)
+			__attribute__nonnull__(pTHX_2);
+#define PERL_ARGS_ASSERT_GETGCB_VAL_UTF8	\
+	assert(pos); assert(eol)
+
 STATIC bool	S_isFOO_lc(pTHX_ const U8 classnum, const U8 character)
 			__attribute__warn_unused_result__;
 
@@ -7431,6 +7441,9 @@ STATIC bool	S_isFOO_utf8_lc(pTHX_ const U8 classnum, const U8* character)
 			__attribute__nonnull__(pTHX_2);
 #define PERL_ARGS_ASSERT_ISFOO_UTF8_LC	\
 	assert(character)
+
+STATIC bool	S_isGCB(const PL_GCB_enum before, const PL_GCB_enum after)
+			__attribute__warn_unused_result__;
 
 STATIC I32	S_reg_check_named_buff_matched(const regexp *rex, const regnode *scan)
 			__attribute__warn_unused_result__

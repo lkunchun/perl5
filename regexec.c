@@ -1937,30 +1937,106 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
 
     case BOUNDL:
         _CHECK_AND_WARN_PROBLEMATIC_LOCALE;
+        if (FLAGS(c) != TRADITIONAL_BOUND) {
+            goto do_boundu;
+        }
+
         FBC_BOUND(isWORDCHAR_LC, isWORDCHAR_LC_uvchr, isWORDCHAR_LC_utf8);
         break;
+
     case NBOUNDL:
         _CHECK_AND_WARN_PROBLEMATIC_LOCALE;
+        if (FLAGS(c) != TRADITIONAL_BOUND) {
+            goto do_nboundu;
+        }
+
         FBC_NBOUND(isWORDCHAR_LC, isWORDCHAR_LC_uvchr, isWORDCHAR_LC_utf8);
         break;
-    case BOUND:
+
+    case BOUND: /* regcomp.c makes sure that this only has the traditional \b
+                   meaning */
+        assert(FLAGS(c) == TRADITIONAL_BOUND);
+
         FBC_BOUND(isWORDCHAR, isWORDCHAR_uni, isWORDCHAR_utf8);
         break;
-    case BOUNDA:
+
+    case BOUNDA: /* regcomp.c makes sure that this only has the traditional \b
+                   meaning */
+        assert(FLAGS(c) == TRADITIONAL_BOUND);
+
         FBC_BOUND_A(isWORDCHAR_A);
         break;
-    case NBOUND:
+
+    case NBOUND: /* regcomp.c makes sure that this only has the traditional \b
+                   meaning */
+        assert(FLAGS(c) == TRADITIONAL_BOUND);
+
         FBC_NBOUND(isWORDCHAR, isWORDCHAR_uni, isWORDCHAR_utf8);
         break;
-    case NBOUNDA:
+
+    case NBOUNDA: /* regcomp.c makes sure that this only has the traditional \b
+                   meaning */
+        assert(FLAGS(c) == TRADITIONAL_BOUND);
+
         FBC_NBOUND_A(isWORDCHAR_A);
         break;
-    case BOUNDU:
-        FBC_BOUND(isWORDCHAR_L1, isWORDCHAR_uni, isWORDCHAR_utf8);
-        break;
+
     case NBOUNDU:
-        FBC_NBOUND(isWORDCHAR_L1, isWORDCHAR_uni, isWORDCHAR_utf8);
+        if ((bound_type) FLAGS(c) == TRADITIONAL_BOUND) {
+            FBC_NBOUND(isWORDCHAR_L1, isWORDCHAR_uni, isWORDCHAR_utf8);
+            break;
+        }
+
+      do_nboundu:
+
+        to_complement = 1;
+        /* FALLTHROUGH */
+
+    case BOUNDU:
+      do_boundu:
+        switch((bound_type) FLAGS(c)) {
+            case TRADITIONAL_BOUND:
+                FBC_BOUND(isWORDCHAR_L1, isWORDCHAR_uni, isWORDCHAR_utf8);
+                break;
+            case GCB_BOUND:
+                if (s == reginfo->strbeg) {
+                    if (to_complement ^ cBOOL(reginfo->intuit || regtry(reginfo, &s))) {
+                        goto got_it;
+                    }
+                    s += (utf8_target) ? UTF8SKIP(s) : 1;
+                }
+
+                if (utf8_target) {
+                    PL_GCB_enum before = getGCB_val_utf8(reghop3((U8*)s, -1, (U8*)(reginfo->strbeg)), (U8*) reginfo->strend);
+                    while (s < strend) {
+                        PL_GCB_enum after = getGCB_val_utf8((U8*) s, (U8*) reginfo->strend);
+                        if (to_complement ^ isGCB(before, after)) {
+                            if (reginfo->intuit || regtry(reginfo, &s)) {
+                                goto got_it;
+                            }
+                            before = after;
+                        }
+                        s += UTF8SKIP(s);
+                    }
+                }
+                else {  /* Not utf8.  Everything is a GCB except between CR and LF */
+                    while (s < strend) {
+                        if (to_complement ^ (UCHARAT(s - 1) != '\r' || UCHARAT(s) != '\n')) {
+                            if (reginfo->intuit || regtry(reginfo, &s)) {
+                                goto got_it;
+                            }
+                            s++;
+                        }
+                    }
+                }
+
+                if (to_complement ^ cBOOL(reginfo->intuit || regtry(reginfo, &s))) {
+                    goto got_it;
+                }
+                break;
+        }
         break;
+
     case LNBREAK:
         REXEC_FBC_CSCAN(is_LNBREAK_utf8_safe(s, strend),
                         is_LNBREAK_latin1_safe(s, strend)
@@ -3926,6 +4002,122 @@ S_setup_EXACTISH_ST_c1_c2(pTHX_ const regnode * const text_node, int *c1p,
     return TRUE;
 }
 
+PERL_STATIC_INLINE PL_GCB_enum
+S_getGCB_val_cp(pTHX_ UV cp)
+{
+    int index = _invlist_search(PL_GCB_invlist, cp);
+    assert(index >= 0);
+
+    return Grapheme_Cluster_Break_invmap[index];
+}
+
+PERL_STATIC_INLINE PL_GCB_enum
+S_getGCB_val_utf8(pTHX_ const U8 * pos, const U8 * eol)
+{
+    PERL_ARGS_ASSERT_GETGCB_VAL_UTF8;
+
+    assert(pos < eol);
+
+    /* XXX Note no error checking */
+    return getGCB_val_cp(utf8_to_uvchr_buf(pos, eol, NULL));
+}
+
+/* This creates a single number by combining two, with 'before' being like the
+ * 10's digit, but this isn't necessarily base 10; it is base however many
+ * elements of the enum there are */
+#define GCBcase(before, after) ((GCB_ENUM_COUNT * before) + after)
+
+STATIC bool
+S_isGCB(const PL_GCB_enum before, const PL_GCB_enum after)
+{
+    switch (GCBcase(before, after)) {
+
+        /*  Break at the start and end of text.
+            GB1.   sot ÷ 	
+            GB2.   ÷ eot
+
+            Break before and after controls except between CR and LF
+            GB4.  ( Control | CR | LF )  ÷ 
+            GB5.   ÷  ( Control | CR | LF )
+
+            Otherwise, break everywhere.
+            GB10.  Any  ÷  Any */
+        default:
+            return TRUE;
+
+        /* Do not break between a CR and LF.
+            GB3.  CR  ×  LF */
+        case GCBcase(PL_GCB_CR, PL_GCB_LF):
+            return FALSE;
+
+        /* Do not break Hangul syllable sequences.
+            GB6.  L  ×  ( L | V | LV | LVT ) */
+        case GCBcase(PL_GCB_L, PL_GCB_L):
+        case GCBcase(PL_GCB_L, PL_GCB_V):
+        case GCBcase(PL_GCB_L, PL_GCB_LV):
+        case GCBcase(PL_GCB_L, PL_GCB_LVT):
+            return FALSE;
+
+        /*  GB7.  ( LV | V )  ×  ( V | T ) */
+        case GCBcase(PL_GCB_LV, PL_GCB_V):
+        case GCBcase(PL_GCB_LV, PL_GCB_T):
+        case GCBcase(PL_GCB_V, PL_GCB_V):
+        case GCBcase(PL_GCB_V, PL_GCB_T):
+            return FALSE;
+
+        /*  GB8.  ( LVT | T)  ×  T */
+        case GCBcase(PL_GCB_LVT, PL_GCB_T):
+        case GCBcase(PL_GCB_T, PL_GCB_T):
+            return FALSE;
+
+        /* Do not break between regional indicator symbols.
+            GB8a.  Regional_Indicator  ×  Regional_Indicator */
+        case GCBcase(PL_GCB_Regional_Indicator, PL_GCB_Regional_Indicator):
+            return FALSE;
+
+        /* Do not break before extending characters.
+            GB9.     ×  Extend */
+	case GCBcase(PL_GCB_Other, PL_GCB_Extend):
+	case GCBcase(PL_GCB_Extend, PL_GCB_Extend):
+	case GCBcase(PL_GCB_L, PL_GCB_Extend):
+	case GCBcase(PL_GCB_LV, PL_GCB_Extend):
+	case GCBcase(PL_GCB_LVT, PL_GCB_Extend):
+	case GCBcase(PL_GCB_Prepend, PL_GCB_Extend):
+	case GCBcase(PL_GCB_Regional_Indicator, PL_GCB_Extend):
+	case GCBcase(PL_GCB_SpacingMark, PL_GCB_Extend):
+	case GCBcase(PL_GCB_T, PL_GCB_Extend):
+	case GCBcase(PL_GCB_V, PL_GCB_Extend):
+            return FALSE;
+
+        /* Do not break before SpacingMarks, or after Prepend characters.
+            GB9a.     ×  SpacingMark */
+	case GCBcase(PL_GCB_Other, PL_GCB_SpacingMark):
+	case GCBcase(PL_GCB_Extend, PL_GCB_SpacingMark):
+	case GCBcase(PL_GCB_L, PL_GCB_SpacingMark):
+	case GCBcase(PL_GCB_LV, PL_GCB_SpacingMark):
+	case GCBcase(PL_GCB_LVT, PL_GCB_SpacingMark):
+	case GCBcase(PL_GCB_Prepend, PL_GCB_SpacingMark):
+	case GCBcase(PL_GCB_Regional_Indicator, PL_GCB_SpacingMark):
+	case GCBcase(PL_GCB_SpacingMark, PL_GCB_SpacingMark):
+	case GCBcase(PL_GCB_T, PL_GCB_SpacingMark):
+	case GCBcase(PL_GCB_V, PL_GCB_SpacingMark):
+            return FALSE;
+
+        /* GB9b.  Prepend  ×   */
+	case GCBcase(PL_GCB_Prepend, PL_GCB_Other):
+	case GCBcase(PL_GCB_Prepend, PL_GCB_L):
+	case GCBcase(PL_GCB_Prepend, PL_GCB_LV):
+	case GCBcase(PL_GCB_Prepend, PL_GCB_LVT):
+	case GCBcase(PL_GCB_Prepend, PL_GCB_Prepend):
+	case GCBcase(PL_GCB_Prepend, PL_GCB_Regional_Indicator):
+	case GCBcase(PL_GCB_Prepend, PL_GCB_T):
+	case GCBcase(PL_GCB_Prepend, PL_GCB_V):
+            return FALSE;
+    }
+
+    NOT_REACHED;
+}
+
 /* returns -1 on failure, $+[0] on success */
 STATIC SSize_t
 S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
@@ -4657,13 +4849,20 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
 	    break;
 	}
 
-	/* XXX At that point regcomp.c would no longer * have to set the FLAGS fields of these */
 	case NBOUNDL: /*  /\B/l  */
             to_complement = 1;
             /* FALLTHROUGH */
 
 	case BOUNDL:  /*  /\b/l  */
             _CHECK_AND_WARN_PROBLEMATIC_LOCALE;
+
+            if (FLAGS(scan) != TRADITIONAL_BOUND) {
+                if (! IN_UTF8_CTYPE_LOCALE) {
+                    Perl_ck_warner(aTHX_ packWARN(WARN_LOCALE), "Use of \\b{} for non-UTF-8 locale is wrong.  Assuming a UTF-8 locale");
+                }
+                goto boundu;
+            }
+
 	    if (utf8_target) {
 		if (locinput == reginfo->strbeg)
 		    ln = isWORDCHAR_LC('\n');
@@ -4730,9 +4929,15 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
             /* FALLTHROUGH */
 
 	case BOUNDU:  /*  /\b/u  */
+          {
+            bool match;
+
+          boundu:
 	    if (utf8_target) {
 
-          bound_utf8:
+              bound_utf8:
+                switch((bound_type) FLAGS(scan)) {
+                    case TRADITIONAL_BOUND:
                 ln = (locinput == reginfo->strbeg)
                      ? isWORDCHAR_L1('\n')
                      : isWORDCHAR_utf8(reghop3((U8*)locinput, -1,
@@ -4740,21 +4945,53 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
                 n = (NEXTCHR_IS_EOS)
                     ? isWORDCHAR_L1('\n')
                     : isWORDCHAR_utf8((U8*)locinput);
+
+                        match = ln != n;
+                        break;
+                    case GCB_BOUND:
+                        if (locinput == reginfo->strbeg || NEXTCHR_IS_EOS) {
+                            match = TRUE;
+                        }
+                        else {
+                            match = isGCB(getGCB_val_utf8(
+                                                reghop3((U8*)locinput,
+                                                        -1,
+                                                        (U8*)(reginfo->strbeg)),
+                                                (U8*) reginfo->strend),
+                                          getGCB_val_utf8((U8*) locinput,
+                                                        (U8*) reginfo->strend));
+                        }
+                        break;
+                }
 	    }
-	    else {
+	    else {  /* Not utf8 target */
+                switch((bound_type) FLAGS(scan)) {
+                    case TRADITIONAL_BOUND:
                 ln = (locinput == reginfo->strbeg)
                     ? isWORDCHAR_L1('\n')
                     : isWORDCHAR_L1(UCHARAT(locinput - 1));
                 n = (NEXTCHR_IS_EOS)
                     ? isWORDCHAR_L1('\n')
                     : isWORDCHAR_L1(nextchr);
-
+                        match = ln != n;
+                        break;
+                    case GCB_BOUND:
+                        if (locinput == reginfo->strbeg || NEXTCHR_IS_EOS) {
+                            match = TRUE;
+                        }
+                        else {
+                            match = isGCB(getGCB_val_cp(UCHARAT(locinput -1)),
+                                          getGCB_val_cp(UCHARAT(locinput)));
+                        }
+                        break;
+                }
 	    }
 
-            if (to_complement ^ (ln == n)) {
+            if (to_complement ^ ! match) {
                 sayNO;
             }
 	    break;
+          }
 
 	case ANYOFL:  /*  /[abc]/l      */
             _CHECK_AND_WARN_PROBLEMATIC_LOCALE;
@@ -5003,148 +5240,21 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
                 }
 	    }
 	    else {
-
-		/* Utf8: See if is ( CR LF ); already know that locinput <
-		 * reginfo->strend, so locinput+1 is in bounds */
-		if ( nextchr == '\r' && locinput+1 < reginfo->strend
-                     && UCHARAT(locinput + 1) == '\n')
-                {
-		    locinput += 2;
-		}
-		else {
-                    STRLEN len;
-
-		    /* In case have to backtrack to beginning, then match '.' */
-		    char *starting = locinput;
-
-		    /* In case have to backtrack the last prepend */
-		    char *previous_prepend = NULL;
-
-		    LOAD_UTF8_CHARCLASS_GCB();
-
-                    /* Match (prepend)*   */
-                    while (locinput < reginfo->strend
-                           && (len = is_GCB_Prepend_utf8(locinput)))
-                    {
-                        previous_prepend = locinput;
-                        locinput += len;
+                PL_GCB_enum prev_gcb = getGCB_val_utf8((U8*) locinput,
+                                                       (U8*) reginfo->strend);
+                locinput += UTF8SKIP(locinput);
+                while (locinput < reginfo->strend) {
+                    PL_GCB_enum cur_gcb = getGCB_val_utf8((U8*) locinput,
+                                                         (U8*) reginfo->strend);
+                    if (isGCB(prev_gcb, cur_gcb)) {
+                        break;
                     }
 
-		    /* As noted above, if we matched a prepend character, but
-		     * the next thing won't match, back off the last prepend we
-		     * matched, as it is guaranteed to match the begin */
-		    if (previous_prepend
-			&& (locinput >=  reginfo->strend
-			    || (! swash_fetch(PL_utf8_X_regular_begin,
-					     (U8*)locinput, utf8_target)
-			         && ! is_GCB_SPECIAL_BEGIN_START_utf8(locinput)))
-                        )
-		    {
-			locinput = previous_prepend;
-		    }
+                    prev_gcb = cur_gcb;
+                    locinput += UTF8SKIP(locinput);
+                }
 
-		    /* Note that here we know reginfo->strend > locinput, as we
-		     * tested that upon input to this switch case, and if we
-		     * moved locinput forward, we tested the result just above
-		     * and it either passed, or we backed off so that it will
-		     * now pass */
-		    if (swash_fetch(PL_utf8_X_regular_begin,
-                                    (U8*)locinput, utf8_target)) {
-                        locinput += UTF8SKIP(locinput);
-                    }
-                    else if (! is_GCB_SPECIAL_BEGIN_START_utf8(locinput)) {
 
-			/* Here did not match the required 'Begin' in the
-			 * second term.  So just match the very first
-			 * character, the '.' of the final term of the regex */
-			locinput = starting + UTF8SKIP(starting);
-                        goto exit_utf8;
-		    } else {
-
-                        /* Here is a special begin.  It can be composed of
-                         * several individual characters.  One possibility is
-                         * RI+ */
-                        if ((len = is_GCB_RI_utf8(locinput))) {
-                            locinput += len;
-                            while (locinput < reginfo->strend
-                                   && (len = is_GCB_RI_utf8(locinput)))
-                            {
-                                locinput += len;
-                            }
-                        } else if ((len = is_GCB_T_utf8(locinput))) {
-                            /* Another possibility is T+ */
-                            locinput += len;
-                            while (locinput < reginfo->strend
-                                && (len = is_GCB_T_utf8(locinput)))
-                            {
-                                locinput += len;
-                            }
-                        } else {
-
-                            /* Here, neither RI+ nor T+; must be some other
-                             * Hangul.  That means it is one of the others: L,
-                             * LV, LVT or V, and matches:
-                             * L* (L | LVT T* | V * V* T* | LV  V* T*) */
-
-                            /* Match L*           */
-                            while (locinput < reginfo->strend
-                                   && (len = is_GCB_L_utf8(locinput)))
-                            {
-                                locinput += len;
-                            }
-
-                            /* Here, have exhausted L*.  If the next character
-                             * is not an LV, LVT nor V, it means we had to have
-                             * at least one L, so matches L+ in the original
-                             * equation, we have a complete hangul syllable.
-                             * Are done. */
-
-                            if (locinput < reginfo->strend
-                                && is_GCB_LV_LVT_V_utf8(locinput))
-                            {
-                                /* Otherwise keep going.  Must be LV, LVT or V.
-                                 * See if LVT, by first ruling out V, then LV */
-                                if (! is_GCB_V_utf8(locinput)
-                                        /* All but every TCount one is LV */
-                                    && (valid_utf8_to_uvchr((U8 *) locinput,
-                                                                         NULL)
-                                                                        - SBASE)
-                                        % TCount != 0)
-                                {
-                                    locinput += UTF8SKIP(locinput);
-                                } else {
-
-                                    /* Must be  V or LV.  Take it, then match
-                                     * V*     */
-                                    locinput += UTF8SKIP(locinput);
-                                    while (locinput < reginfo->strend
-                                           && (len = is_GCB_V_utf8(locinput)))
-                                    {
-                                        locinput += len;
-                                    }
-                                }
-
-                                /* And any of LV, LVT, or V can be followed
-                                 * by T*            */
-                                while (locinput < reginfo->strend
-                                       && (len = is_GCB_T_utf8(locinput)))
-                                {
-                                    locinput += len;
-                                }
-                            }
-                        }
-                    }
-
-                    /* Match any extender */
-                    while (locinput < reginfo->strend
-                            && swash_fetch(PL_utf8_X_extend,
-                                            (U8*)locinput, utf8_target))
-                    {
-                        locinput += UTF8SKIP(locinput);
-                    }
-		}
-              exit_utf8:
-		if (locinput > reginfo->strend) sayNO;
 	    }
 	    break;
             

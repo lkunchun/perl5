@@ -18791,6 +18791,38 @@ sub _test_break($$) {
             utf8::upgrade($string);
         }
 
+        my @modifiers = qw(a aa d lC u i);
+        push @modifiers, "l$utf8_locale" if defined $utf8_locale;
+        for my $modifier (@modifiers) {
+            my $display_locale = "";
+            if ($modifier =~ / ^ l (.*) /x) {
+                my $locale = $1;
+                $display_locale = "(locale = $locale)";
+                use Config;
+                if (defined $Config{d_setlocale}) {
+                    eval { require POSIX; import POSIX 'locale_h'; };
+                    if (defined &POSIX::LC_CTYPE) {
+                        POSIX::setlocale(&POSIX::LC_CTYPE, $locale);
+                    }
+                }
+                $modifier = 'l';
+            }
+            no warnings qw(locale regexp surrogate);
+            my $pattern = "(?$modifier:$break_pattern)";
+            print "not " unless $string =~ qr/$pattern/;
+            print "ok ", ++$Tests, " - \"$display_string\" =~ /$pattern/; line $line $display_locale\n";
+
+            # Repeat with the first \B{} in the pattern.  This makes sure the
+            # code in regexec.c:find_byclass() for \B gets executed
+            if ($pattern =~ / ( .*? : ) .* ( \\B\{ .* ) /x) {
+                my $B_pattern = "$1$2";
+                print "not " unless $string =~ qr/$B_pattern/;
+                print "ok ", ++$Tests, " - \"$display_string\" =~ /$B_pattern/ $display_locale\n";
+            }
+        }
+
+        next if $break_type ne 'gcb';
+
         # Finally, do the \X match.
         my @matches = $string =~ /(\X)/g;
 

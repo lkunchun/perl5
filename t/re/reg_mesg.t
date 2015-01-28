@@ -142,8 +142,8 @@ my @death =
 '/(?lil:foo)/' => 'Regexp modifier "l" may not appear twice {#} m/(?lil{#}:foo)/',
 '/(?aaia:foo)/' => 'Regexp modifier "a" may appear a maximum of twice {#} m/(?aaia{#}:foo)/',
 '/(?i-l:foo)/' => 'Regexp modifier "l" may not appear after the "-" {#} m/(?i-l{#}:foo)/',
-'/a\b{cde/' => 'Use "\b\{" instead of "\b{" {#} m/a\{#}b{cde/',
-'/a\B{cde/' => 'Use "\B\{" instead of "\B{" {#} m/a\{#}B{cde/',
+'/a\b{cde/' => 'Missing right brace on \b{} {#} m/a\b{{#}cde/',
+'/a\B{cde/' => 'Missing right brace on \B{} {#} m/a\B{{#}cde/',
 
  '/((x)/' => 'Unmatched ( {#} m/({#}(x)/',
 
